@@ -1,0 +1,14 @@
+#!/bin/bash
+#
+# 升级前：停止服务。
+
+set -u
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+if [ -x "${HERE}/start.sh" ]; then
+    bash "${HERE}/start.sh" stop
+else
+    echo "[DNS-RP] 未找到 start.sh，跳过停止"
+fi
+
+exit 0

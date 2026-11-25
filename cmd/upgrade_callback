@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+# 升级后：重新准备权限并启动。
+#
+# 升级会替换程序文件，但：
+#   * 用户组关系不变（www-data 成员保留）
+#   * SQLite 数据保留（在 PKGVAR，不在 APPDEST）
+
+set -u
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+. "${HERE}/common.sh" 2>/dev/null || {
+    echo "[DNS-RP] 无法加载 common.sh"
+}
+
+dnrp_log "========== upgrade_callback =========="
+
+if [ "$(id -u)" = "0" ]; then
+    APP_USERNAME=$(dnrp_detect_user "" 2>/dev/null || true)
+    [ -n "$APP_USERNAME" ] && dnrp_ensure_wwwdata "$APP_USERNAME" || true
+fi
+
+if [ -x "${HERE}/start.sh" ]; then
+    bash "${HERE}/start.sh" start
+fi
+
+dnrp_log "========== upgrade_callback 完成 =========="
+exit 0

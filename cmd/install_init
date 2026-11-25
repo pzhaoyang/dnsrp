@@ -1,0 +1,41 @@
+#!/bin/bash
+#
+# 安装前：准备运行条件。
+#
+# 做三件事：
+#   1. 把应用用户加入 www-data 组（读 fnOS 证书）
+#   2. 探测 fnOS DDNS 表是否可访问（决定 DDNS 功能是否可用）
+#   3. 检查 Python 版本
+#
+# 全部失败都不阻断安装 —— 应用仍可启动，只是相应功能降级。
+
+set -u
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+. "${HERE}/common.sh" 2>/dev/null || {
+    echo "[DNS-RP] 无法加载 common.sh，跳过安装前准备"
+    exit 0
+}
+
+dnrp_log "========== install_init =========="
+
+if [ "$(id -u)" != "0" ]; then
+    dnrp_log "非 root 运行，跳过系统级准备"
+    exit 0
+fi
+
+PY=$(dnrp_python) || { dnrp_log "错误：缺少 python3"; exit 0; }
+dnrp_check_python || true
+
+# 应用在安装阶段还没有自己的用户，只能按名字猜测
+APP_USERNAME=$(dnrp_detect_user "" 2>/dev/null || true)
+if [ -n "$APP_USERNAME" ]; then
+    dnrp_ensure_wwwdata "$APP_USERNAME" || true
+else
+    dnrp_log "尚未创建应用用户，跳过加组（install_callback 会重试）"
+fi
+
+dnrp_verify_ddns_access || true
+
+dnrp_log "========== install_init 完成 =========="
+exit 0

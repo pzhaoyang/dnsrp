@@ -1,0 +1,2142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DNS-RP 域名控制台</title>
+<style>
+:root{
+  --bg:#f5f6f8; --card:#fff; --bd:#e4e6eb; --tx:#1f2329; --tx2:#646a73;
+  --pri:#3370ff; --pri-h:#245bdb; --ok:#00b42a; --warn:#ff7d00; --err:#f53f3f;
+  --rad:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--tx); font-size:14px; line-height:1.6;
+  padding:16px;
+}
+.wrap{max-width:1280px;margin:0 auto}
+header{
+  background:var(--card); border:1px solid var(--bd); border-radius:var(--rad);
+  padding:16px 20px; margin-bottom:16px; display:flex;align-items:center;gap:12px;
+  flex-wrap:wrap;
+}
+header h1{font-size:18px;font-weight:600}
+header .sub{color:var(--tx2);font-size:12px}
+header .spacer{flex:1}
+.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--bd);
+  border-radius:var(--rad);padding:4px;margin-bottom:16px;overflow-x:auto}
+.tab{
+  padding:8px 18px;border-radius:6px;cursor:pointer;white-space:nowrap;
+  color:var(--tx2);font-size:14px;border:none;background:none;font-family:inherit;
+}
+.tab:hover{background:#f2f3f5;color:var(--tx)}
+.tab.on{background:var(--pri);color:#fff}
+.panel{display:none}
+.panel.on{display:block}
+.card{
+  background:var(--card);border:1px solid var(--bd);border-radius:var(--rad);
+  padding:20px;margin-bottom:16px;
+}
+.card h2{font-size:15px;font-weight:600;margin-bottom:4px;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card .hint{color:var(--tx2);font-size:12px;margin-bottom:16px}
+.bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.spacer{flex:1}
+button{
+  font-family:inherit;font-size:14px;padding:6px 16px;border-radius:6px;
+  border:1px solid var(--bd);background:#fff;color:var(--tx);cursor:pointer;
+  transition:.15s;
+}
+button:hover{border-color:var(--pri);color:var(--pri)}
+button.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+button.pri:hover{background:var(--pri-h);border-color:var(--pri-h);color:#fff}
+button.danger{color:var(--err);border-color:#ffd2d2}
+button.danger:hover{background:var(--err);border-color:var(--err);color:#fff}
+button.sm{padding:3px 10px;font-size:12px}
+button:disabled{opacity:.5;cursor:not-allowed}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{
+  text-align:left;padding:10px 12px;background:#fafbfc;color:var(--tx2);
+  font-weight:500;border-bottom:1px solid var(--bd);white-space:nowrap;
+}
+td{padding:10px 12px;border-bottom:1px solid #f2f3f5;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafbfc}
+.tag{
+  display:inline-block;padding:1px 8px;border-radius:4px;font-size:12px;
+  background:#f2f3f5;color:var(--tx2);margin-right:4px;
+}
+.tag.ok{background:#e8ffea;color:var(--ok)}
+.tag.warn{background:#fff7e8;color:var(--warn)}
+.tag.err{background:#ffece8;color:var(--err)}
+.tag.pri{background:#e8f3ff;color:var(--pri)}
+.empty{padding:40px;text-align:center;color:var(--tx2);font-size:13px}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+.mask{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;
+  align-items:center;justify-content:center;z-index:100;padding:20px;
+}
+.mask.on{display:flex}
+.modal{
+  background:var(--card);border-radius:var(--rad);width:100%;max-width:560px;
+  max-height:90vh;overflow:auto;
+}
+.modal header{
+  border:none;border-bottom:1px solid var(--bd);border-radius:0;
+  margin:0;padding:16px 20px;
+}
+.modal header h3{font-size:16px;font-weight:600}
+.modal .body{padding:20px}
+.modal footer{
+  padding:16px 20px;border-top:1px solid var(--bd);
+  display:flex;gap:8px;justify-content:flex-end;
+}
+.field{margin-bottom:16px}
+.field label{
+  display:block;font-size:13px;margin-bottom:6px;font-weight:500;
+}
+.field label .req{color:var(--err);margin-left:2px}
+.field input[type=text],.field input[type=password],.field input[type=number],
+.field select,.field textarea{
+  width:100%;padding:7px 11px;border:1px solid var(--bd);border-radius:6px;
+  font-family:inherit;font-size:14px;color:var(--tx);background:#fff;
+  box-sizing:border-box;
+}
+.field input[type=password]{
+  /* 密码框要和文本框视觉一致，否则看起来像"消失" */
+  letter-spacing:.05em;
+}
+.field input[type=password]::placeholder{letter-spacing:normal}
+.field input:focus,.field select:focus,.field textarea:focus{
+  outline:none;border-color:var(--pri);box-shadow:0 0 0 2px rgba(51,112,255,.1);
+}
+.field .tip{font-size:12px;color:var(--tx2);margin-top:4px}
+.field .err{font-size:12px;color:var(--err);margin-top:4px;display:none}
+.field.bad .err{display:block}
+.field.bad input{border-color:var(--err)}
+.row{display:flex;gap:12px}
+.row .field{flex:1}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px}
+.chk input{width:16px;height:16px;accent-color:var(--pri)}
+#toast{
+  position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-20px);
+  background:#1f2329;color:#fff;padding:10px 20px;border-radius:6px;
+  font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:200;
+  max-width:80vw;
+}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--err)}
+#toast.ok{background:var(--ok)}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat .item{
+  background:#fafbfc;border:1px solid var(--bd);border-radius:6px;padding:14px;
+}
+.stat .item .n{font-size:24px;font-weight:600;color:var(--pri)}
+.stat .item .l{font-size:12px;color:var(--tx2);margin-top:2px}
+.spin{
+  display:inline-block;width:14px;height:14px;border:2px solid #d9d9d9;
+  border-top-color:var(--pri);border-radius:50%;animation:sp .7s linear infinite;
+  vertical-align:-2px;margin-right:6px;
+}
+@keyframes sp{to{transform:rotate(360deg)}}
+.port-list{display:flex;flex-wrap:wrap;gap:8px}
+.port-item{
+  border:1px solid var(--bd);border-radius:6px;padding:10px 14px;background:#fafbfc;
+}
+.port-item .p{font-weight:600;font-size:15px}
+.port-item .d{font-size:12px;color:var(--tx2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>反向代理控制台</h1>
+    <div class="sub">反向代理 · 证书管理 · DDNS &nbsp;|&nbsp; 全部复用飞牛 OS 能力</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab on" data-tab="overview">概览</button>
+  <button class="tab" data-tab="ddns">DDNS</button>
+  <button class="tab" data-tab="certs">证书</button>
+  <button class="tab" data-tab="proxy">反向代理</button>
+  <button class="tab" data-tab="settings">设置</button>
+</div>
+
+<!-- 能力状态横幅：fnOS 升级导致功能失效时在这里提示 -->
+<div id="cap-banner" style="display:none"></div>
+
+<!-- ==================== 概览 ==================== -->
+<div class="panel on" id="p-overview">
+  <div class="card">
+    <h2>运行状态</h2>
+    <div class="hint">本应用以普通身份运行，只使用高位端口，不与飞牛 OS 争抢 80/443。</div>
+    <div class="stat" id="stats">
+      <div class="item"><div class="n">-</div><div class="l">加载中</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>监听端口</h2>
+    <div class="hint">每个端口按域名分流；HTTPS 端口的证书实时取自飞牛 OS 证书系统。</div>
+    <div class="port-list" id="ports"></div>
+  </div>
+</div>
+
+<!-- ==================== 反代 ==================== -->
+<div class="panel" id="p-ddns">
+  <div class="card">
+    <h2>DDNS 记录</h2>
+    <div class="hint">
+      这里展示飞牛 OS 的全部 DDNS 记录。实际 IP 上报由飞牛 OS 的定时任务完成，
+      本应用只负责登记与查看状态。
+    </div>
+    <div class="bar">
+      <button class="pri" onclick="openDDNS()">批量添加</button>
+      <button onclick="loadDDNS(true)">刷新</button>
+    </div>
+    <div id="ddns-list"><div class="empty">加载中…</div></div>
+  </div>
+</div>
+
+<div class="panel" id="p-certs">
+  <div class="card">
+    <h2>飞牛 OS 证书</h2>
+    <div class="hint">
+      直接读取飞牛 OS 的证书登记表。反代的 HTTPS 就用这里的证书，不做任何复制。
+    </div>
+    <div class="bar">
+      <button class="pri" onclick="openIssue()" id="btn-issue">申请证书</button>
+      <button onclick="loadCerts(true)">刷新列表</button>
+    </div>
+    <div id="cert-list"><div class="empty">加载中…</div></div>
+  </div>
+</div>
+
+<div class="panel" id="p-proxy">
+  <div class="card">
+    <h2>反向代理规则</h2>
+    <div class="hint">
+      建议使用 8080 或更高端口。80/443/16666/16667 属于飞牛 OS 系统服务，不做占用。
+    </div>
+    <div class="bar">
+      <button class="pri" onclick="openRule()">添加规则</button>
+      <div class="spacer"></div>
+      <button onclick="reloadProxy()">重载引擎</button>
+    </div>
+    <div id="proxy-list"><div class="empty">加载中…</div></div>
+  </div>
+</div>
+
+<!-- ==================== 设置 ==================== -->
+<div class="panel" id="p-settings">
+  <div class="card">
+    <h2>飞牛 OS 账号</h2>
+    <div class="hint">
+      证书签发和 DDNS 管理需要调用飞牛 OS 的内部接口。
+      这些接口要求会话密钥与连接同源，无法借用网页登录状态，
+      所以需要在这里保存一次账号密码。
+      <br><br>
+      密码仅保存在本机应用数据目录（权限 0600），只用于本机调用飞牛 OS。
+    </div>
+    <div id="auth-status" style="margin:16px 0">
+      <span class="spin"></span>检测中…
+    </div>
+    <div class="field">
+      <label>用户名</label>
+      <input type="text" id="cfg-user" placeholder="飞牛 OS 登录用户名">
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input type="password" id="cfg-pass" placeholder="留空表示不修改">
+      <div class="tip">仅保存在本机，不会外传</div>
+    </div>
+    <div class="field">
+      <label>访问码（可选）</label>
+      <input type="text" id="cfg-ac" placeholder="若 NAS 开启了访问保护才需要">
+    </div>
+    <div class="bar">
+      <button class="pri" onclick="saveFnCfg()" id="cfg-save">保存</button>
+      <button onclick="testFnCfg()" id="cfg-test">测试连接</button>
+      <button onclick="recheckCaps()">重新检测能力</button>
+    </div>
+    <div id="cfg-status" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
+</div>
+
+<!-- ==================== 规则弹窗 ==================== -->
+<div class="mask" id="rule-mask">
+  <div class="modal">
+    <header><h3 id="rule-title">添加反代规则</h3></header>
+    <div class="body">
+      <input type="hidden" id="r-id">
+      <div class="field" id="f-name">
+        <label>规则名称<span class="req">*</span></label>
+        <input type="text" id="r-name" placeholder="例如 影视站">
+        <div class="err">请填写规则名称</div>
+      </div>
+      <div class="field" id="f-domains">
+        <label>域名<span class="req">*</span></label>
+        <input type="text" id="r-domains" placeholder="多个用逗号分隔，支持 *.example.com">
+        <div class="tip">HTTPS 端口会自动从飞牛 OS 证书里按域名匹配</div>
+        <div class="err">至少填写一个域名</div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>监听端口<span class="req">*</span></label>
+          <input type="number" id="r-port" value="8080" min="1024" max="65535">
+          <div class="tip">不可使用 80/443/16666/16667</div>
+        </div>
+        <div class="field">
+          <label>协议</label>
+          <select id="r-tls">
+            <option value="0">HTTP</option>
+            <option value="1">HTTPS</option>
+          </select>
+          <div class="tip">同一端口只能是一种协议</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>后端协议</label>
+          <select id="r-tscheme">
+            <option value="http">http</option>
+            <option value="https">https</option>
+          </select>
+        </div>
+        <div class="field" id="f-thost">
+          <label>后端地址<span class="req">*</span></label>
+          <input type="text" id="r-thost" value="127.0.0.1" placeholder="IP 或主机名">
+          <div class="err">请填写后端地址</div>
+        </div>
+        <div class="field" id="f-tport">
+          <label>后端端口<span class="req">*</span></label>
+          <input type="number" id="r-tport" value="8005" min="1" max="65535">
+          <div class="err">端口无效</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>高级</label>
+        <div class="chk" style="margin-bottom:6px">
+          <input type="checkbox" id="r-forcehttps">
+          <label for="r-forcehttps" style="margin:0;font-weight:400">
+            强制跳转 HTTPS（仅当同域名有 HTTPS 端口时生效）
+          </label>
+        </div>
+        <div class="chk">
+          <input type="checkbox" id="r-preservehost">
+          <label for="r-preservehost" style="margin:0;font-weight:400">
+            保留原始 Host 头转发给后端
+          </label>
+        </div>
+      </div>
+    </div>
+    <footer>
+      <button onclick="closeRule()">取消</button>
+      <button class="pri" onclick="saveRule()" id="rule-save">保存</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ==================== 证书申请弹窗 ==================== -->
+<div class="mask" id="issue-mask">
+  <div class="modal">
+    <header><h3>申请证书</h3></header>
+    <div class="body">
+      <div class="field" id="f-domains-issue">
+        <label>域名<span class="req">*</span></label>
+        <textarea id="i-domains" rows="4"
+          placeholder="每行一个或用逗号分隔&#10;可以混合写：&#10;example.com&#10;*.example.com&#10;www.example.com"></textarea>
+        <div class="tip">
+          同一张证书里的域名必须同根域。通配符写作 <code>*.example.com</code>。
+          多域名会自动走「种子证书」路径。
+        </div>
+        <div class="err">至少填写一个域名</div>
+      </div>
+      <div class="field">
+        <label>备注</label>
+        <input type="text" id="i-desc" value="DNS-RP" maxlength="64">
+      </div>
+      <div class="field">
+        <label>Let's Encrypt 通知邮箱（可选）</label>
+        <input type="text" id="i-email" placeholder="留空则走种子证书路径">
+        <div class="tip" id="email-tip">
+          填写后单域名会走 fnOS 原生申请接口 —— 但该接口<b>只能签 RSA</b>。
+          要 ECC 证书请留空（走种子证书路径）。
+        </div>
+      </div>
+      <div class="field">
+        <label>加密算法</label>
+        <select id="i-ecc" onchange="onEccChange()">
+          <option value="0">RSA 2048</option>
+          <option value="1">ECC (ECDSA P-256)</option>
+        </select>
+        <div class="tip" id="ecc-tip">ECC 体积小、握手快；个别老客户端可能不认</div>
+      </div>
+      <div class="field">
+        <label>DNS 验证用 DDNS 记录（留空自动选择）</label>
+        <select id="i-ddns">
+          <option value="">自动匹配同根域记录</option>
+        </select>
+        <div class="tip">证书通过 DNS-01 验证，需要该根域的 DNS 商凭据</div>
+      </div>
+      <div class="field" id="f-twofa" style="display:none">
+        <label>2FA 验证码<span class="req">*</span></label>
+        <input type="text" id="i-twofa" placeholder="6 位数字" maxlength="6">
+        <div class="tip">该账号开了双重验证，验证码 30 秒过期</div>
+      </div>
+
+      <!-- 签发过程中的进度反馈（25~120 秒，不能没有提示）-->
+      <div id="issue-progress" style="display:none;margin-top:12px;padding:10px;
+           background:var(--bg2);border-radius:6px;font-size:13px"></div>
+    </div>
+    <footer>
+      <button onclick="closeIssue()">取消</button>
+      <button class="pri" onclick="submitIssue()" id="issue-save">开始申请</button>
+    </footer>
+  </div>
+</div>
+
+<div class="mask" id="ddns-mask">
+  <div class="modal">
+    <header><h3>批量添加 DDNS</h3></header>
+    <div class="body">
+      <div class="field" id="f-d-domains">
+        <label>域名<span class="req">*</span></label>
+        <textarea id="d-domains" rows="5"
+          placeholder="每行一个，或用逗号分隔&#10;例如：&#10;app.example.com&#10;api.example.com"></textarea>
+        <div class="tip">可以一次填多个同根域的域名</div>
+        <div class="err">至少填写一个域名</div>
+      </div>
+      <div class="field">
+        <label>DNS 服务商</label>
+        <select id="d-provider" onchange="onProviderChange()">
+          <option value="cloudflare">Cloudflare</option>
+          <option value="aliyun">阿里云</option>
+          <option value="tencentcloud">腾讯云</option>
+          <option value="huawei">华为云</option>
+          <option value="oraydns">花生壳</option>
+          <option value="changeip">ChangeIP</option>
+        </select>
+        <div class="tip" id="d-provider-tip">选择提供该域名解析的服务商</div>
+      </div>
+      <div class="field">
+        <label>检查间隔（分钟）</label>
+        <input type="number" id="d-interval" value="5" min="1" max="1440">
+      </div>
+
+      <!-- 凭据是必填：没有它记录建出来也无法上报 IP，等于白建 -->
+      <div class="field" id="f-d-ak">
+        <label>Access Key / ID<span class="req">*</span></label>
+        <input type="text" id="d-ak" placeholder="例如 Cloudflare 的 API Token">
+        <div class="tip" id="d-ak-tip">DNS 服务商提供的 API 凭据</div>
+        <div class="err">必须填写</div>
+      </div>
+      <div class="field" id="f-d-sk">
+        <label>Secret / Key<span class="req" id="d-sk-req">*</span></label>
+        <input type="password" id="d-sk" placeholder="对应密钥">
+        <div class="tip" id="d-sk-tip">
+          与 Access Key 配合使用；部分服务商（如 Cloudflare API Token）可留空
+        </div>
+        <div class="err">必须填写</div>
+      </div>
+    </div>
+    <footer>
+      <button onclick="closeDDNS()">取消</button>
+      <button class="pri" onclick="saveDDNS()" id="ddns-save">开始添加</button>
+    </footer>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ============================================================ 能力状态
+//
+// fnOS 的内部接口（证书签发、DDNS 管理）不是公开 API，随时可能随版本变化。
+// 这里把后端探测到的能力状态渲染成横幅，让用户一眼看清：
+//   * 哪些功能可用
+//   * 哪些失效了、为什么、该去哪个原生页面操作
+//
+// 设计原则：**失效只降级，不崩溃**
+
+const CAP_LABELS = {
+  'cert.read': '读取证书',
+  'cert.issue': '签发证书',
+  'ddns.read': '读取 DDNS',
+  'ddns.write': '管理 DDNS',
+  'fnos.session': 'fnOS 登录会话',
+};
+
+let CAPS = null;
+
+async function loadCapabilities(force) {
+  try {
+    const d = force
+      ? await api('capabilities/recheck', { method: 'POST' })
+      : await api('capabilities');
+    CAPS = d;
+    renderCapBanner(d);
+    return d;
+  } catch (e) {
+    console.warn('能力探测失败:', e.message);
+    return null;
+  }
+}
+
+function capOk(key) {
+  return !!(CAPS && CAPS.items && CAPS.items[key] && CAPS.items[key].ok);
+}
+
+function renderCapBanner(caps) {
+  const box = $('cap-banner');
+  if (!caps || !caps.items) { box.style.display = 'none'; return; }
+
+  const failed = Object.entries(caps.items)
+    .filter(([, v]) => !v.ok)
+    .map(([k, v]) => ({ key: k, ...v }));
+
+  if (!failed.length) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  // 只有「读取证书」失败才算严重（其他都能降级）
+  const critical = failed.some((f) => f.key === 'cert.read');
+
+  const rows = failed.map((f) => {
+    const name = CAP_LABELS[f.key] || f.key;
+    const hint = f.fallbackHint
+      ? `<div style="margin-top:4px;color:var(--tx2);font-size:12px">→ ${esc(f.fallbackHint)}</div>`
+      : '';
+    return `<div style="margin:8px 0">
+      <b>${esc(name)}</b> 不可用
+      <div style="color:var(--tx2);font-size:12px;margin-top:2px">${esc(f.reason || '未知原因')}</div>
+      ${hint}
+    </div>`;
+  }).join('');
+
+  box.style.display = '';
+  box.innerHTML = `
+    <div class="card" style="border-left:3px solid var(--${critical ? 'err' : 'warn'})">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div style="flex:1">
+          <div style="font-weight:600;margin-bottom:4px">
+            ${critical ? '⚠️ 部分功能不可用' : 'ℹ️ 部分功能降级'}
+            ${caps.fnosVersion ? `<span class="tag" style="margin-left:8px">fnOS ${esc(caps.fnosVersion)}</span>` : ''}
+          </div>
+          ${rows}
+        </div>
+        <button onclick="recheckCaps()" id="cap-recheck">重新检测</button>
+      </div>
+    </div>`;
+}
+
+async function recheckCaps() {
+  const btn = $('cap-recheck');
+  if (btn) { btn.disabled = true; btn.textContent = '检测中…'; }
+  await loadCapabilities(true);
+  toast('已重新检测', 'ok');
+  refreshAll();
+}
+
+// ============================================================ 基础工具
+
+const $ = (id) => document.getElementById(id);
+
+// ---------------------------------------------------------- fnOS 登录凭证
+//
+// ★ 为什么需要这段：
+//   本应用是 iframe 内嵌在飞牛 OS 网页里的。用户能打开界面，
+//   说明已经在飞牛 OS 登录过了，凭证必然存在。
+//
+//   但凭证「放在哪」有两种可能（取决于飞牛 OS 的认证模式）：
+//     1. legacy 模式    -> localStorage 里的 fnos-token / fnos-Secret
+//     2. ticket-cookie  -> 浏览器 Cookie
+//
+//   Cookie 会由浏览器自动带给 CGI（index.cgi 能读到 HTTP_COOKIE），
+//   但 localStorage 只有前端 JS 能读。
+//
+//   所以这里主动从 localStorage 取出凭证，通过自定义头送给后端，
+//   两条路一起兜，保证任何模式下都能拿到。
+//
+// ★ 安全性：
+//   凭证只通过本机 unix socket 传给后端进程，不出机器。
+//   后端只在内存里使用，不落盘、不写进日志。
+function getFnosCreds() {
+  try {
+    const token = localStorage.getItem('fnos-token') || '';
+    const secret = localStorage.getItem('fnos-Secret') || '';
+    const device = localStorage.getItem('fnos-device') || '';
+    if (!token && !secret) return null;
+    return { token, secret, device };
+  } catch (e) {
+    // 隐私模式/跨域限制下 localStorage 可能抛错
+    return null;
+  }
+}
+
+function credHeaders() {
+  const c = getFnosCreds();
+  if (!c) return {};
+  const h = {};
+  if (c.token) h['X-Dnrp-Token'] = c.token;
+  if (c.secret) h['X-Dnrp-Secret'] = c.secret;
+  if (c.device) h['X-Dnrp-Device'] = c.device;
+  return h;
+}
+
+// ---------------------------------------------------------- 提示
+//
+// ★ 三类提示，按语义分：
+//
+//   1. ok / 空     → 短暂的角标提示（成功确认）。
+//                    操作成功用对话框反而烦人，一闪就够。
+//   2. err         → **应用内对话框**。错误需要看清楚、可能需要复制，
+//                    而且不能在 3 秒后自己消失。
+//   3. warn        → 应用内对话框（警告通常也需要说明）。
+//
+//   ★ 全程不使用 alert / confirm / prompt 等浏览器原生弹窗。
+
+function toast(msg, kind) {
+  // 成功类：轻量角标
+  if (!kind || kind === 'ok') {
+    const el = $('toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'on' + (kind ? ' ' + kind : '');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { el.className = ''; }, 3200);
+    return;
+  }
+
+  // 错误/警告类：走自绘对话框
+  const title = kind === 'err' ? '操作失败' : '提示';
+  const plain = String(msg || '').replace(/\n/g, '<br>');
+  showDialog(title, `<div style="line-height:1.7">${plain}</div>`,
+             [{ text: '知道了', pri: true }]);
+}
+
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+async function api(path, opts) {
+  opts = opts || {};
+  const res = await fetch('api/' + path, {
+    method: opts.method || 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...credHeaders(),
+    },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+
+  let data;
+  const text = await res.text();
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    throw new Error('响应不是 JSON：' + text.slice(0, 200));
+  }
+
+  // index.cgi 在后端未启动时返回纯文本，这里兜底
+  if (typeof data !== 'object' || data === null) {
+    throw new Error('响应格式异常');
+  }
+  if (data.ok === false) {
+    throw new Error(data.error || '请求失败');
+  }
+  return data.ok ? data.data : data;
+}
+
+// ============================================================ 标签页
+
+document.querySelectorAll('.tab').forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll('.tab').forEach((b) => b.classList.remove('on'));
+    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('on'));
+    btn.classList.add('on');
+    $('p-' + btn.dataset.tab).classList.add('on');
+
+    if (btn.dataset.tab === 'proxy') loadProxy();
+    if (btn.dataset.tab === 'certs') loadCerts();
+    if (btn.dataset.tab === 'ddns') loadDDNS();
+    if (btn.dataset.tab === 'settings') loadSettings();
+  };
+});
+
+// ============================================================ 概览
+
+async function loadOverview() {
+  try {
+    const d = await api('overview');
+
+    // 证书那张卡片要带明细：
+    //   数字 = 用户自己的证书张数（按证书实体去重，排除 fnOS 内置）
+    //   下面小字说明覆盖多少域名、隐藏了几张系统证书
+    const certSub = [];
+    if (d.fnosCertDomains) certSub.push(`覆盖 ${d.fnosCertDomains} 个域名`);
+    if (d.fnosSystemCerts) certSub.push(`隐藏 ${d.fnosSystemCerts} 张系统证书`);
+
+    $('stats').innerHTML = [
+      ['proxyRules', '反代规则', ''],
+      ['ddnsRecords', 'DDNS 记录', ''],
+      ['fnosCerts', '证书', certSub.join('　')],
+      ['listeners', '监听端口', ''],
+    ].map(([k, label, sub]) => {
+      let v = d[k];
+      if (k === 'listeners') v = Array.isArray(v) ? v.length : 0;
+      return `<div class="item">
+        <div class="n">${esc(v ?? 0)}</div>
+        <div class="l">${esc(label)}</div>
+        ${sub ? `<div style="color:var(--tx2);font-size:11px;margin-top:2px">${esc(sub)}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    const ports = d.listeners || [];
+    $('ports').innerHTML = ports.length
+      ? ports.map((p) => `
+          <div class="port-item">
+            <div class="p">:${esc(p.port)} <span class="tag ${p.tls ? 'pri' : ''}">${p.tls ? 'HTTPS' : 'HTTP'}</span></div>
+            <div class="d">${esc((p.domains || []).length)} 个域名 · ${esc(p.rules)} 条规则</div>
+          </div>`).join('')
+      : '<div class="empty">暂无监听端口（添加反代规则后出现）</div>';
+  } catch (e) {
+    $('stats').innerHTML = `<div class="item"><div class="n">!</div><div class="l">${esc(e.message)}</div></div>`;
+  }
+}
+
+// ============================================================ 反代
+
+async function loadProxy() {
+  const box = $('proxy-list');
+  box.innerHTML = '<div class="empty"><span class="spin"></span>加载中…</div>';
+  try {
+    const rows = await api('proxies');
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty">还没有反代规则。点击「添加规则」开始。</div>';
+      return;
+    }
+    box.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>名称</th><th>域名</th><th>监听</th><th>后端</th><th>状态</th><th style="width:120px">操作</th>
+        </tr></thead>
+        <tbody>
+        ${rows.map((r) => `
+          <tr>
+            <td>${esc(r.name)}</td>
+            <td>${(r.domains || []).map((d) => `<span class="tag">${esc(d)}</span>`).join('')}</td>
+            <td class="mono">:${esc(r.listen_port)}
+              <span class="tag ${r.listen_tls ? 'pri' : ''}">${r.listen_tls ? 'TLS' : 'HTTP'}</span>
+            </td>
+            <td class="mono">${esc(r.target_scheme)}://${esc(r.target_host)}:${esc(r.target_port)}</td>
+            <td>${r.enabled ? '<span class="tag ok">启用</span>' : '<span class="tag">停用</span>'}</td>
+            <td>
+              <button class="sm" onclick="openRule(${esc(r.id)})">编辑</button>
+              <button class="sm danger" onclick="delRule(${esc(r.id)}, '${esc(r.name)}')">删除</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    box.innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+let editingRule = null;
+
+function openRule(id) {
+  editingRule = null;
+  $('r-id').value = '';
+  $('r-name').value = '';
+  $('r-domains').value = '';
+  $('r-port').value = '8080';
+  $('r-tls').value = '0';
+  $('r-tscheme').value = 'http';
+  $('r-thost').value = '127.0.0.1';
+  $('r-tport').value = '8005';
+  $('r-forcehttps').checked = false;
+  $('r-preservehost').checked = false;
+  $('rule-title').textContent = '添加反代规则';
+  document.querySelectorAll('.field').forEach((f) => f.classList.remove('bad'));
+
+  if (id) {
+    api('proxies').then((rows) => {
+      const r = rows.find((x) => String(x.id) === String(id));
+      if (!r) return;
+      editingRule = r;
+      $('r-id').value = r.id;
+      $('r-name').value = r.name;
+      $('r-domains').value = (r.domains || []).join(', ');
+      $('r-port').value = r.listen_port;
+      $('r-tls').value = r.listen_tls ? '1' : '0';
+      $('r-tscheme').value = r.target_scheme || 'http';
+      $('r-thost').value = r.target_host;
+      $('r-tport').value = r.target_port;
+      $('r-forcehttps').checked = !!r.force_https;
+      $('r-preservehost').checked = !!r.preserve_host;
+      $('rule-title').textContent = '编辑反代规则';
+    }).catch((e) => toast(e.message, 'err'));
+  }
+
+  $('rule-mask').classList.add('on');
+}
+
+function closeRule() { $('rule-mask').classList.remove('on'); }
+
+function markBad(fieldId, bad) {
+  const el = $(fieldId);
+  if (el) el.classList.toggle('bad', bad);
+}
+
+async function saveRule() {
+  const data = {
+    name: $('r-name').value.trim(),
+    domains: $('r-domains').value.trim(),
+    listen_port: parseInt($('r-port').value, 10),
+    listen_tls: $('r-tls').value === '1',
+    target_scheme: $('r-tscheme').value,
+    target_host: $('r-thost').value.trim(),
+    target_port: parseInt($('r-tport').value, 10),
+    force_https: $('r-forcehttps').checked,
+    preserve_host: $('r-preservehost').checked,
+    enabled: true,
+  };
+  if (editingRule) data.id = editingRule.id;
+
+  // 前端粗校验
+  let bad = false;
+  if (!data.name) { markBad('f-name', true); bad = true; } else markBad('f-name', false);
+  if (!data.domains) { markBad('f-domains', true); bad = true; } else markBad('f-domains', false);
+  if (!data.target_host) { markBad('f-thost', true); bad = true; } else markBad('f-thost', false);
+  if (!data.target_port || data.target_port < 1 || data.target_port > 65535) {
+    markBad('f-tport', true); bad = true;
+  } else markBad('f-tport', false);
+  if (bad) { toast('请检查标红的字段', 'err'); return; }
+
+  const btn = $('rule-save');
+  btn.disabled = true;
+  try {
+    if (editingRule) {
+      await api('proxies/' + editingRule.id, { method: 'PUT', body: data });
+      toast('规则已更新', 'ok');
+    } else {
+      await api('proxies', { method: 'POST', body: data });
+      toast('规则已添加', 'ok');
+    }
+    closeRule();
+    loadProxy();
+    loadOverview();
+  } catch (e) {
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function delRule(id, name) {
+  const okRule = await showConfirm({
+    title: '删除反向代理规则',
+    body: `
+      <div style="margin-bottom:10px">确定删除这条规则？</div>
+      <div style="padding:10px;background:var(--bg2);border-radius:4px;
+                  font-family:monospace;font-size:13px">${esc(name)}</div>`,
+    okText: '删除',
+    danger: true,
+  });
+  if (!okRule) return;
+  try {
+    await api('proxies/' + id, { method: 'DELETE' });
+    toast('已删除', 'ok');
+    loadProxy();
+    loadOverview();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+async function reloadProxy() {
+  try {
+    await api('proxies/reload', { method: 'POST' });
+    toast('引擎已重载', 'ok');
+    loadOverview();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+// ============================================================ 证书
+
+// ============================================================ 证书
+//
+// ★ 判断一张证书是否"真的在用"
+//
+//   fnOS 的 network_gateway_cert.conf 只是「域名 → 用哪张证书」的绑定表，
+//   它不代表这个域名现在真的在提供服务。
+//
+//   典型场景：用户删了反代规则，但登记表里还留着映射，
+//   如果只看登记表，证书永远显示"使用中"，删不掉。
+//
+//   正确判断：证书覆盖的域名中，至少一个仍在**已启用的反代规则**里。
+
+let ACTIVE_PROXY_DOMAINS = new Set();
+
+async function loadActiveProxyDomains() {
+  try {
+    const rules = await api('proxies');
+    const s = new Set();
+    (rules || []).forEach((r) => {
+      if (!r.enabled) return;
+      (r.domains || []).forEach((d) => {
+        if (d) s.add(String(d).trim().toLowerCase());
+      });
+    });
+    ACTIVE_PROXY_DOMAINS = s;
+  } catch (e) {
+    // 读不到就保守处理：当作没有活跃规则（宁可让用户能删）
+    ACTIVE_PROXY_DOMAINS = new Set();
+  }
+  return ACTIVE_PROXY_DOMAINS;
+}
+
+function isCertReallyUsed(cert) {
+  const doms = cert.coveredDomains || [];
+  if (!doms.length) return false;
+  return doms.some((d) => ACTIVE_PROXY_DOMAINS.has(String(d).trim().toLowerCase()));
+}
+
+async function delCert(certId, label) {
+  const ok = await showConfirm({
+    title: '删除证书',
+    body: `
+      <div style="margin-bottom:12px">
+        确定要从飞牛 OS 证书库删除这张证书？
+      </div>
+      <div style="padding:10px;background:var(--bg2);border-radius:4px;
+                  font-family:monospace;font-size:13px;margin-bottom:12px">
+        ${esc(label)}
+      </div>
+      <div style="color:var(--tx2);font-size:12px;line-height:1.8">
+        · 只删除证书库里的记录<br>
+        · 正在被域名使用的证书无法删除<br>
+        · 删除后无法恢复，需要重新申请
+      </div>`,
+    okText: '删除',
+    danger: true,
+  });
+  if (!ok) return;
+
+  if (!capOk('cert.issue')) {
+    toast('当前环境无法连接飞牛 OS 证书接口', 'err');
+    return;
+  }
+
+  toast(`正在删除证书 ${label}…`, 'ok');
+  try {
+    await api('certs/delete', { method: 'POST', body: { id: certId } });
+    toast(`✓ 已删除证书 ${label}`, 'ok');
+    loadCerts();
+    loadOverview();
+  } catch (e) {
+    // 「正在使用」这类错误要完整展示，里面的指引很重要
+    toast(e.message, 'err');
+  }
+}
+
+// ★ 记住「是否显示系统证书」的状态
+//
+// 之前 checkbox 勾了立刻失效：因为 loadCerts() 一进来就把整个
+// cert-list 的 innerHTML 换成「加载中」，checkbox 被销毁重建，
+// 重建时读到的 $('show-system-certs') 还是旧的（已不存在）→ 又变回未勾选。
+// 所以状态必须存在 JS 变量里，而不是靠 DOM。
+let SHOW_SYSTEM_CERTS = false;
+
+function onToggleSystemCerts(checked) {
+  SHOW_SYSTEM_CERTS = !!checked;
+  loadCerts();
+}
+
+// ============================================================ 数据缓存
+//
+// ★ 为什么要有缓存：
+//   每次切标签都会重新请求，而后端每次请求都要：
+//     1. 新建 fnOS WebSocket 连接并登录（≈1~2 秒）
+//     2. 调用 appcgi 接口（≈0.5~1 秒）
+//   所以来回切标签会明显感觉「每次都在等」。
+//
+//   这里做一层很短的缓存（默认 15 秒）：
+//     * 切回来先显示缓存内容（立即响应）
+//     * 同时后台静默刷新（stale-while-revalidate）
+//     * 任何写操作完成后主动失效对应缓存
+//
+//   用户看到的就不再是「白屏加载中」，而是「马上有内容，然后悄悄更新」。
+
+const CACHE_TTL = 15000;
+const _cache = {};
+
+function cacheGet(key) {
+  const e = _cache[key];
+  if (!e) return null;
+  if (Date.now() - e.at > CACHE_TTL) return null;
+  return e.data;
+}
+
+function cacheSet(key, data) {
+  _cache[key] = { data, at: Date.now() };
+}
+
+function cacheDrop(...keys) {
+  for (const k of keys) delete _cache[k];
+}
+
+// 带缓存的加载：先渲染旧数据，再静默刷新
+async function loadWithCache(key, render, fetchFn, opts) {
+  const force = opts && opts.force;
+  const cached = force ? null : cacheGet(key);
+
+  if (cached) {
+    render(cached, { stale: true });     // 立即显示，不闪白屏
+  }
+
+  try {
+    const fresh = await fetchFn();
+    cacheSet(key, fresh);
+    // 有缓存且数据没变时就不重绘，避免闪烁
+    if (!cached || JSON.stringify(fresh) !== JSON.stringify(cached)) {
+      render(fresh, { stale: false });
+    }
+  } catch (e) {
+    if (!cached) throw e;                // 没缓存才把错误抛给调用方显示
+    // 有缓存时刷新失败：保留旧内容，不打断用户
+    console.warn(`刷新 ${key} 失败:`, e.message);
+  }
+}
+
+async function loadCerts(force) {
+  const box = $('cert-list');
+
+  // 没有缓存时才显示 loading，有缓存就立刻出内容
+  if (!cacheGet('certs') || force) {
+    box.innerHTML = '<div class="empty"><span class="spin"></span>加载中…</div>';
+  }
+
+  try {
+    await loadActiveProxyDomains();
+    await loadWithCache('certs',
+      (rows) => renderCerts(rows),
+      () => api('certs'),
+      { force });
+  } catch (e) {
+    box.innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+function renderCerts(rows) {
+  const box = $('cert-list');
+
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty">飞牛 OS 证书登记表为空，请先到「系统设置 → 证书管理」添加。</div>';
+      return;
+    }
+
+    // 按证书实体展示（后端已按证书文件去重聚合）
+    //
+    // ★ 默认隐藏飞牛系统内置的两张证书：
+    //     · fnOS 自签兜底证书（CN=fnOS）
+    //     · FN Connect 专属证书（*.fnos.net）
+    //   它们不是用户申请的，混在列表里只会干扰。
+    //   但反代 SNI 仍然依赖它们兜底，所以数据保留，只是不展示。
+    const showSystem = SHOW_SYSTEM_CERTS;
+    const all = rows;
+    const rowsView = showSystem ? all : all.filter((c) => !c.isSystemCert);
+
+    const normal = rowsView.filter((c) => !c.isFallback);
+    const fallback = rowsView.filter((c) => c.isFallback);
+    const hiddenCount = all.length - rowsView.length;
+
+    let html = `
+      <div style="margin-bottom:12px;color:var(--tx2);font-size:13px;
+                  display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span>
+          共 <b style="color:var(--pri)">${normal.length}</b> 张证书
+          ${fallback.length ? '（另有 1 张兜底证书）' : ''}
+          ，覆盖
+          <b>${rowsView.reduce((s, c) => s + (c.domainCount || 0), 0)}</b> 个域名
+        </span>
+        <label style="display:inline-flex;align-items:center;gap:5px;
+                      cursor:pointer;font-size:12px">
+          <input type="checkbox" id="show-system-certs"
+                 onchange="onToggleSystemCerts(this.checked)"
+                 ${showSystem ? 'checked' : ''}
+                 style="width:auto;margin:0">
+          显示系统证书
+          ${hiddenCount > 0 ? `（已隐藏 ${hiddenCount} 张）` : ''}
+        </label>
+      </div>`;
+
+    if (!rowsView.length) {
+      box.innerHTML = html + `<div class="empty">
+        没有用户申请的证书。<br>
+        <span style="color:var(--tx2);font-size:12px">
+          点上面「申请证书」签发一张。
+        </span>
+      </div>`;
+      return;
+    }
+
+    html += '<table><thead><tr>'
+      + '<th>主域名</th><th>颁发者</th><th>类型</th><th>有效期</th>'
+      + '<th>覆盖域名</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+
+    const renderRow = (c) => {
+      if (c.error) {
+        return `<tr>
+          <td>${esc(c.primaryDomain || c.host)}</td>
+          <td colspan="4" class="mono" style="color:var(--err)">${esc(c.error)}</td>
+          <td><span class="tag err">不可用</span></td>
+          <td></td>
+        </tr>`;
+      }
+      const dleft = c.daysLeft;
+      const cls = c.expired ? 'err' : (dleft < 14 ? 'warn' : 'ok');
+      const dtxt = c.expired ? '已过期' : `${dleft} 天`;
+      const domains = c.coveredDomains || [];
+
+      // 覆盖域名：前 3 个显示为标签，其余折叠
+      let domCell;
+      if (c.isFallback) {
+        domCell = '<span class="tag">兜底证书（未匹配到域名时使用）</span>';
+      } else if (!domains.length) {
+        domCell = '<span class="tag warn">未覆盖任何域名</span>';
+      } else {
+        const shown = domains.slice(0, 3).map((d) => `<span class="tag">${esc(d)}</span>`).join('');
+        const more = domains.length > 3
+          ? `<span class="tag pri" title="${esc(domains.join('\n'))}">+${domains.length - 3}</span>`
+          : '';
+        domCell = shown + more
+          + `<div style="color:var(--tx2);font-size:12px;margin-top:4px">`
+          + `共 ${domains.length} 个域名</div>`;
+      }
+
+      // 操作列
+      //
+      // ★ 判断依据要区分两件事：
+      //   · fnOS 证书登记表里有映射  ≠  这个域名现在真的在用
+      //   · 只有「该证书覆盖的域名中，至少一个仍在反代规则里启用」才算真占用
+      //
+      //   否则用户删了反代规则后，证书永远显示"使用中"，删不掉。
+      const inUse = isCertReallyUsed(c);
+      let opCell;
+      if (c.isFallback) {
+        opCell = '<span style="color:var(--tx2);font-size:12px" '
+          + 'title="兜底证书是系统的安全网，删除后未匹配域名将无证书可用">兜底保护</span>';
+      } else if (c.certId == null) {
+        opCell = '<span style="color:var(--tx2);font-size:12px">—</span>';
+      } else if (inUse) {
+        opCell = `<span style="color:var(--tx2);font-size:12px" `
+          + `title="该域名仍在反向代理中使用，先去删掉对应规则">使用中</span>`;
+      } else {
+        opCell = `<button class="mini" onclick="delCert(${c.certId}, `
+          + `'${esc(c.primaryDomain || c.host)}')">删除</button>`;
+      }
+
+      return `<tr>
+        <td><b>${esc(c.primaryDomain || c.host)}</b></td>
+        <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(c.issuer)}</td>
+        <td><span class="tag">${esc(c.keyType || '-')}</span></td>
+        <td class="mono">${esc(new Date(c.notAfter * 1000).toLocaleDateString())}</td>
+        <td>${domCell}</td>
+        <td><span class="tag ${cls}">${dtxt}</span></td>
+        <td>${opCell}</td>
+      </tr>`;
+    };
+
+    rowsView.forEach((c) => { html += renderRow(c); });
+    html += '</tbody></table>';
+    box.innerHTML = html;
+}
+
+
+// ============================================================ DDNS
+
+// 编辑 DDNS 记录（可改检查间隔 + 服务商凭据）
+//
+// ★ 为什么要先拉 detail：
+//   fnOS 的 update 是「全量覆盖」，不传凭据就会清空它。
+//   而 record.list 不返回凭据，只有 record.detail 返回（明文）。
+//   所以编辑前必须先 detail 出当前值，预填到输入框。
+//
+// ★ 凭据可以改：detail 返回明文，update 时 fnOS 自己加密存储。
+async function editDDNS(domain, interval) {
+  if (!capOk('ddns.write')) {
+    toast('当前环境不支持修改 DDNS', 'err');
+    return;
+  }
+
+  // 先取当前凭据（明文），用于预填
+  let cur = { accessKey: '', accessSecret: '', provider: 'cloudflare',
+              updateInterval: interval || 5 };
+  try {
+    cur = await api('ddns/detail?domain=' + encodeURIComponent(domain));
+    if (!cur) throw new Error('读取详情失败');
+  } catch (e) {
+    showDialog('读取记录失败', `
+      <div style="line-height:1.7">${esc(e.message || '')}</div>
+      <div style="margin-top:10px;color:var(--tx2);font-size:12px">
+        如果这条记录的凭据已丢失，可以到飞牛 OS「远程访问 → DDNS」
+        重新填写，或者删除后在本页重新添加。
+      </div>`, [{ text: '知道了', pri: true }]);
+    return;
+  }
+
+  const ok = await showPrompt({
+    title: '编辑 DDNS 记录',
+    body: `
+      <div style="margin-bottom:14px;padding:10px;background:var(--bg2);
+                  border-radius:4px;font-family:monospace;font-size:13px">
+        ${esc(domain)}
+        <span class="tag" style="margin-left:8px">${esc(cur.provider || '-')}</span>
+      </div>
+      <div style="padding:10px;background:var(--bg2);border-left:3px solid var(--warn);
+                  border-radius:4px;font-size:12px;line-height:1.7;margin-bottom:14px">
+        凭据已从飞牛 OS 读出（明文显示）。<b>只改间隔时不要改动它们</b>，
+        保存时会把原值一并回填，不会丢。<br>
+        如需更换 Token，直接改下面的值即可。
+      </div>`,
+    fields: [
+      {
+        id: 'ed-interval',
+        label: '检查间隔（分钟）',
+        type: 'number',
+        value: String(cur.updateInterval || interval || 5),
+        min: 1,
+        max: 1440,
+        tip: '飞牛 OS 按此间隔检测公网 IP 变化并上报',
+      },
+      {
+        id: 'ed-ak',
+        label: 'Access Key / ID',
+        type: 'text',
+        value: cur.accessKey || '',
+        placeholder: '通常无需修改',
+        tip: '留空则保持原值',
+      },
+      {
+        id: 'ed-sk',
+        label: 'Secret / Key',
+        type: 'text',
+        value: cur.accessSecret || '',
+        placeholder: '通常无需修改',
+        tip: '留空则保持原值；Cloudflare API Token 方式可留空',
+      },
+    ],
+    okText: '保存',
+  });
+
+  if (!ok) return;
+
+  const v = (ok['ed-interval'] || '').trim();
+  const nv = parseInt(v, 10);
+  if (!nv || nv < 1 || nv > 1440) {
+    toast('检查间隔需在 1~1440 之间', 'err');
+    return;
+  }
+
+  const ak = (ok['ed-ak'] || '').trim();
+  const sk = (ok['ed-sk'] || '').trim();
+
+  const intervalChanged = nv !== interval;
+  const credChanged = ak !== (cur.accessKey || '')
+    || sk !== (cur.accessSecret || '');
+
+  if (!intervalChanged && !credChanged) {
+    toast('没有改动', 'ok');
+    return;
+  }
+
+  try {
+    const body = { domain, update_interval: nv };
+    // 只有真的变了才传，避免无谓覆盖
+    if (credChanged) {
+      if (ak) body.access_key = ak;
+      if (sk) body.access_secret = sk;
+    }
+    const r = await api('ddns/update', { method: 'POST', body });
+    cacheDrop('ddns', 'overview');
+    toast(r.credChanged ? '✓ 已保存（含凭据变更）' : '✓ 已保存', 'ok');
+    // 必须 await，否则界面读到的是旧数据（用户会以为没刷新）
+    await loadDDNS(true);
+    await loadOverview();
+  } catch (e) {
+    showDialog('保存失败', `<div style="line-height:1.7;white-space:pre-wrap">${esc(e.message)}</div>`,
+      [{ text: '知道了', pri: true }]);
+  }
+}
+
+async function delDDNS(domain) {
+  const okDel = await showConfirm({
+    title: '删除 DDNS 记录',
+    body: `
+      <div style="margin-bottom:12px">确定要删除这条 DDNS 记录？</div>
+      <div style="padding:10px;background:var(--bg2);border-radius:4px;
+                  font-family:monospace;font-size:13px;margin-bottom:12px">
+        ${esc(domain)}
+      </div>
+      <div style="color:var(--tx2);font-size:12px">
+        删除会同时在 DNS 服务商那边清理解析，可能需要 10~60 秒。
+      </div>`,
+    okText: '删除',
+    danger: true,
+  });
+  if (!okDel) return;
+
+  if (!capOk('ddns.write')) {
+    toast('当前环境不支持删除 DDNS，请到飞牛 OS 原生页面操作', 'err');
+    return;
+  }
+
+  // 删除可能耗时几十秒，给出持续反馈
+  let sec = 0;
+  toast(`正在删除 ${domain}… 0s`, 'ok');
+  const timer = setInterval(() => {
+    sec += 1;
+    toast(`正在删除 ${domain}… ${sec}s（需在 DNS 服务商同步清理）`, 'ok');
+  }, 1000);
+
+  try {
+    await api('ddns?domain=' + encodeURIComponent(domain), { method: 'DELETE' });
+    toast(`✓ 已删除 ${domain}`, 'ok');
+    loadDDNS();
+    loadOverview();
+  } catch (e) {
+    loadCapabilities(true);
+    toast(e.message, 'err');
+  } finally {
+    clearInterval(timer);
+  }
+}
+
+async function loadDDNS(force) {
+  const box = $('ddns-list');
+
+  // 能力未就绪时不发请求，直接给降级提示（应对 fnOS 升级导致接口失效）
+  if (CAPS && !capOk('ddns.read')) {
+    const c = CAPS.items['ddns.read'] || {};
+    box.innerHTML = `<div class="empty">
+      <div style="margin-bottom:8px;color:var(--warn)">DDNS 管理当前不可用</div>
+      <div style="color:var(--tx2);font-size:13px">${esc(c.reason || '')}</div>
+      ${c.fallbackHint ? `<div style="margin-top:8px">→ ${esc(c.fallbackHint)}</div>` : ''}
+    </div>`;
+    return;
+  }
+
+  if (!cacheGet('ddns') || force) {
+    box.innerHTML = '<div class="empty"><span class="spin"></span>加载中…</div>';
+  }
+
+  try {
+    await loadWithCache('ddns',
+      (rows) => renderDDNS(rows),
+      () => api('ddns'),
+      { force });
+  } catch (e) {
+    // 失败后重探能力，让横幅反映最新状态
+    loadCapabilities(true);
+    box.innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+function renderDDNS(rows) {
+  const box = $('ddns-list');
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty">
+      飞牛 OS 里还没有 DDNS 记录。<br>
+      <span style="color:var(--tx2);font-size:12px">
+        建议先在「系统设置 → 远程访问 → DDNS」添加一条，之后本页即可查看。
+      </span>
+    </div>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>域名</th><th>服务商</th><th>IPv4</th><th>IPv6</th>
+        <th>状态</th><th>间隔</th><th>操作</th>
+      </tr></thead>
+      <tbody>
+      ${rows.map((r) => {
+        const st = r.status || '';
+        const cls = st === 'suc' ? 'ok' : (st === 'loading' || st === 'init' ? 'warn' : 'err');
+        return `<tr>
+          <td><b>${esc(r.domain)}</b></td>
+          <td><span class="tag">${esc(r.providerAlias || r.provider || '-')}</span></td>
+          <td class="mono" style="font-size:12px">${esc(r.ipv4Addr || r.ipv4_addr || r.ipv4 || '-')}</td>
+          <td class="mono" style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis">${esc(r.ipv6Addr || r.ipv6_addr || r.ipv6 || '-')}</td>
+          <td><span class="tag ${cls}">${esc(st || '-')}</span></td>
+          <td class="mono">${esc(r.updateInterval || r.update_interval || '-')} 分</td>
+          <td style="white-space:nowrap">${capOk('ddns.write')
+            ? `<button class="mini" onclick="editDDNS('${esc(r.domain)}', ${esc(r.updateInterval || r.update_interval || 5)})">编辑</button>
+               <button class="mini" onclick="delDDNS('${esc(r.domain)}')">删除</button>`
+            : '<span style="color:var(--tx2);font-size:12px">只读</span>'}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function closeDDNS() {
+  const mask = $('ddns-mask');
+  if (mask && !tryCloseMask(mask, 'manual')) return;
+  mask.classList.remove('on');
+  resetDdnsForm();
+}
+
+function openDDNS() {
+  resetDdnsForm();
+  $('ddns-mask').classList.add('on');
+  // 聚焦域名框，减少一次点击
+  setTimeout(() => { const t = $('d-domains'); if (t) t.focus(); }, 100);
+}
+
+// 服务商切换：不同服务商的凭据形态不同
+//
+// ★ Cloudflare 有两种凭据方式：
+//   · API Token（推荐）→ 只需一个值，放在 Access Key，Secret 可留空
+//   · Global API Key   → 需要 Email + Key 两个值
+//   其余服务商（阿里云/腾讯云/华为云等）都是 AccessKey + Secret 成对出现。
+function onProviderChange() {
+  const p = $('d-provider').value;
+  const skReq = $('d-sk-req');
+  const skTip = $('d-sk-tip');
+  const akTip = $('d-ak-tip');
+  const pTip = $('d-provider-tip');
+
+  if (p === 'cloudflare') {
+    skReq.style.display = 'none';        // 不再强制
+    akTip.textContent = 'Cloudflare API Token（推荐），或 Global API Key 的 Email';
+    skTip.innerHTML = 'API Token 方式可留空；'
+      + '若用 Global API Key，这里填 Key、上面填账号 Email';
+    pTip.textContent = 'Cloudflare：推荐使用 API Token（权限 Zone.DNS:Edit）';
+  } else {
+    skReq.style.display = '';
+    akTip.textContent = '服务商的 AccessKey / SecretID';
+    skTip.textContent = '与 Access Key 配对的 SecretKey / SecretKey';
+    pTip.textContent = '选择提供该域名解析的服务商';
+  }
+}
+
+async function saveDDNS() {
+  const raw = $('d-domains').value.trim();
+  if (!raw) {
+    markBad('f-d-domains', true);
+    toast('请填写域名', 'err');
+    return;
+  }
+  markBad('f-d-domains', false);
+
+  const domains = raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+  if (!domains.length) { toast('请填写域名', 'err'); return; }
+
+  // ★ 凭据必填：没有凭据的记录建出来也无法上报 IP，会卡在 loading
+  const ak = $('d-ak').value.trim();
+  const sk = $('d-sk').value.trim();
+  const needSecret = $('d-sk').required !== false
+    && $('d-sk-req').style.display !== 'none';
+
+  if (!ak) {
+    markBad('f-d-ak', true);
+    toast('请填写 Access Key / ID', 'err');
+    $('d-ak').focus();
+    return;
+  }
+  markBad('f-d-ak', false);
+
+  if (needSecret && !sk) {
+    markBad('f-d-sk', true);
+    toast('请填写 Secret / Key', 'err');
+    $('d-sk').focus();
+    return;
+  }
+  markBad('f-d-sk', false);
+
+  const btn = $('ddns-save');
+  btn.disabled = true;
+  btn.textContent = '添加中…';
+  try {
+    const results = await api('ddns', {
+      method: 'POST',
+      body: {
+        domains,
+        update_interval: parseInt($('d-interval').value, 10) || 5,
+        provider: $('d-provider').value,
+        access_key: ak,
+        access_secret: sk,
+      },
+    });
+
+    const ok = results.filter((r) => r.ok).length;
+    const fail = results.length - ok;
+
+    if (fail === 0) {
+      toast(`已添加 ${ok} 个域名，飞牛 OS 将在几分钟内完成上报`, 'ok');
+      closeDDNS();
+      resetDdnsForm();
+    } else {
+      const failed = results.filter((r) => !r.ok);
+      showDialog('部分域名添加失败', `
+        <div style="margin-bottom:10px">
+          成功 <b>${ok}</b> 个，失败 <b>${fail}</b> 个。
+        </div>
+        <table style="width:100%;font-size:12px">
+          <thead><tr><th style="text-align:left">域名</th>
+          <th style="text-align:left">原因</th></tr></thead>
+          <tbody>
+          ${failed.map((f) => `<tr>
+            <td style="vertical-align:top;padding:4px 8px 4px 0">${esc(f.domain)}</td>
+            <td style="color:var(--err);word-break:break-all">${esc(f.error || '')}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>`, [{ text: '知道了', pri: true }]);
+    }
+    loadDDNS();
+    loadOverview();
+  } catch (e) {
+    showDialog('添加 DDNS 失败', `<pre style="white-space:pre-wrap;font-size:12px">${esc(e.message)}</pre>`,
+      [{ text: '知道了', pri: true }]);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '开始添加';
+  }
+}
+
+function resetDdnsForm() {
+  if ($('d-domains')) $('d-domains').value = '';
+  if ($('d-ak')) $('d-ak').value = '';
+  if ($('d-sk')) $('d-sk').value = '';
+  if ($('d-interval')) $('d-interval').value = '5';
+  const det = document.querySelector('#ddns-mask details');
+  if (det) det.open = false;
+}
+
+// ============================================================ 证书申请
+
+async function openIssue() {
+  // 签发依赖 fnOS 内部接口，能力未就绪时给出明确指引而不是让用户白等
+  if (CAPS && !capOk('cert.issue')) {
+    const c = CAPS.items['cert.issue'] || {};
+    toast(c.reason || '证书签发当前不可用', 'err');
+    if (c.fallbackHint) {
+      setTimeout(() => toast(c.fallbackHint, 'ok'), 200);
+    }
+    return;
+  }
+
+  $('i-domains').value = '';
+  $('i-desc').value = 'DNS-RP';
+  $('i-email').value = '';
+  $('i-ecc').value = '0';
+  $('i-twofa').value = '';
+  $('f-twofa').style.display = 'none';
+  $('issue-mask').classList.add('on');
+
+  // 填充 DDNS 记录下拉（用官方 API）
+  const sel = $('i-ddns');
+  sel.innerHTML = '<option value="">自动匹配同根域记录</option>';
+  try {
+    const rows = await api('ddns/fnos');
+    rows.forEach((r) => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = `${r.domain} (${r.providerAlias || r.provider})`;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    // 没有凭据时忽略，不影响申请（会用自动匹配）
+    console.warn('读取 DDNS 记录失败:', e.message);
+  }
+}
+
+function closeIssue(force) {
+  // force=true 用于「操作已成功完成」的路径，必须能关掉
+  if (!force) {
+    const btn = $('issue-save');
+    if (btn && btn.disabled && btn.textContent.includes('签发中')) {
+      toast('证书正在签发，请等待完成', 'warn');
+      return;
+    }
+    const mask = $('issue-mask');
+    if (mask && !tryCloseMask(mask, 'manual')) return;
+  }
+  $('issue-mask').classList.remove('on');
+  resetIssueForm();
+}
+
+function resetIssueForm() {
+  const tip = $('issue-progress');
+  if (tip) { tip.style.display = 'none'; tip.innerHTML = ''; }
+
+  const btn = $('issue-save');
+  if (btn) { btn.disabled = false; btn.textContent = '开始申请'; }
+
+  // 清空表单，避免下次打开看到上次的残留
+  const f = (id) => $(id);
+  if (f('i-domains')) f('i-domains').value = '';
+  if (f('i-desc')) f('i-desc').value = 'DNS-RP';
+  if (f('i-email')) { f('i-email').value = ''; f('i-email').disabled = false; }
+  if (f('i-twofa')) f('i-twofa').value = '';
+  if (f('f-twofa')) f('f-twofa').style.display = 'none';
+}
+
+function onEccChange() {
+  const useEcc = $('i-ecc').value === '1';
+  const tip = $('ecc-tip');
+  const email = $('i-email');
+  const emailTip = $('email-tip');
+
+  if (useEcc) {
+    // fnOS 原生申请接口只签 RSA，选了 ECC 就必须走种子路径
+    tip.innerHTML = '已选 ECC。会走<b>种子证书路径</b>，'
+      + '<span style="color:var(--warn)">邮箱将被忽略</span>（fnOS 原生接口只支持 RSA）。';
+    email.value = '';
+    email.disabled = true;
+    email.placeholder = '已选 ECC，此框不生效（fnOS 原生接口只签 RSA）';
+    emailTip.innerHTML = 'ECC 证书只能通过种子证书路径签发，邮箱在此不适用。';
+  } else {
+    tip.textContent = 'RSA 兼容性最好；选此项时填了邮箱会走 fnOS 原生接口';
+    email.disabled = false;
+    email.placeholder = '留空则走种子证书路径';
+    emailTip.innerHTML = '填写后单域名会走 fnOS 原生申请接口（只能签 RSA）。'
+      + '要 ECC 证书请把算法切到 ECC。';
+  }
+}
+
+async function submitIssue() {
+  const raw = $('i-domains').value.trim();
+  if (!raw) { markBad('f-domains-issue', true); toast('请填写域名', 'err'); return; }
+  markBad('f-domains-issue', false);
+
+  const domains = raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+  if (!domains.length) { toast('请填写域名', 'err'); return; }
+
+  const btn = $('issue-save');
+  btn.disabled = true;
+
+  // ★ 签发要走 ACME DNS-01，实测 25~120 秒。
+  //   期间必须给出可见反馈，否则用户以为界面卡死/消失了。
+  let sec = 0;
+  const tick = () => {
+    sec += 1;
+    btn.textContent = `签发中… ${sec}s`;
+    const tip = $('issue-progress');
+    if (tip) {
+      tip.style.display = '';
+      tip.innerHTML = `<span class="spin"></span> 正在向 Let's Encrypt 申请契约 `
+        + `（DNS-01 验证，通常 25~120 秒）<br>`
+        + `<span style="color:var(--tx2);font-size:12px">`
+        + `已等待 ${sec} 秒，请勿关闭此窗口</span>`;
+    }
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+
+  try {
+    const body = {
+      domains,
+      desc: $('i-desc').value.trim() || 'DNS-RP',
+      email: $('i-email').disabled ? '' : $('i-email').value.trim(),
+      ecc: $('i-ecc').value === '1',
+      ddns_id: $('i-ddns').value || null,
+      twofa: $('i-twofa').value.trim(),
+    };
+
+    const r = await api('certs/issue', { method: 'POST', body });
+
+    const method = r.method === 'apply' ? 'fnOS 原生接口' : '种子证书路径';
+    const algo = body.ecc ? 'ECC' : 'RSA';
+
+    // ★ 先把申请窗口关掉，再弹结果 —— 否则表单窗口会一直挡着
+    closeIssue(true);
+    loadCerts();
+    loadOverview();
+
+    showDialog('证书签发成功', `
+      <div style="margin-bottom:14px;padding:10px;background:var(--bg2);
+                  border-left:3px solid var(--ok);border-radius:4px">
+        证书已经签发并导入飞牛 OS 证书库。
+      </div>
+      <table style="width:100%;font-size:13px">
+        <tr><td style="color:var(--tx2);width:90px">域名</td>
+            <td style="font-family:monospace">${esc(domains.join(', '))}</td></tr>
+        <tr><td style="color:var(--tx2)">算法</td><td><b>${algo}</b></td></tr>
+        <tr><td style="color:var(--tx2)">签发路径</td><td>${esc(method)}</td></tr>
+      </table>
+      <div style="margin-top:14px;color:var(--tx2);font-size:12px">
+        如需让某个域名使用这张证书，请到飞牛 OS
+        「系统设置 → 证书管理」把它绑定到对应域名。
+      </div>`, [{ text: '知道了', pri: true }]);
+
+  } catch (e) {
+    const msg = e.message || '';
+
+    // ★ 失败时同样先关闭申请窗口，结果用对话框说明
+    closeIssue(true);
+
+    if (msg.includes('2FA') || msg.includes('验证码')) {
+      const mask = $('issue-mask');
+      if (mask) mask.classList.add('on');   // 2FA 要重新填，窗口留着
+      $('f-twofa').style.display = '';
+      showDialog('需要双重验证', msg, [{ text: '知道了', pri: true }]);
+    } else if (msg.includes('DDNS') || msg.includes('Domain Not Match')) {
+      showDdnsRequirementDialog(msg, domains);
+    } else {
+      showDialog('签发失败', `<div style="line-height:1.7;white-space:pre-wrap">${esc(msg)}</div>`,
+                 [{ text: '知道了', pri: true }]);
+    }
+  } finally {
+    clearInterval(timer);
+    btn.disabled = false;
+    btn.textContent = '开始申请';
+    const tip = $('issue-progress');
+    if (tip) { tip.style.display = 'none'; tip.innerHTML = ''; }
+  }
+}
+
+// ============================================================ 设置
+
+async function checkAuth() {
+  const box = $('auth-status');
+  box.innerHTML = '<span class="spin"></span>检测中…';
+  try {
+    const d = await api('settings/fnos');
+    const f = d.fallback || {};
+
+    let html = '';
+    if (f.configured) {
+      html += '<div style="margin-bottom:8px">'
+        + '<span class="tag ok">已配置</span> '
+        + `账号 ${esc(f.user)}`
+        + '</div>';
+    } else {
+      html += '<div style="margin-bottom:8px">'
+        + '<span class="tag err">未配置</span> '
+        + '请填写飞牛 OS 用户名和密码'
+        + '</div>';
+    }
+
+    if (CAPS && CAPS.items) {
+      const bad = Object.entries(CAPS.items).filter(([, v]) => !v.ok);
+      if (bad.length && f.configured) {
+        html += `<div style="margin-top:8px;color:var(--warn);font-size:12px">`
+          + `${bad.length} 项能力不可用，请检查密码是否正确</div>`;
+      }
+    }
+
+    box.innerHTML = html;
+    $('cfg-user').value = f.user || '';
+    $('cfg-pass').value = '';
+
+    return !!f.configured;
+  } catch (e) {
+    box.innerHTML = `<span class="tag err">检测失败</span> ${esc(e.message)}`;
+    return false;
+  }
+}
+
+async function loadSettings() {
+  await checkAuth();
+  $('cfg-status').innerHTML = '';
+}
+
+async function saveFnCfg() {
+  const user = $('cfg-user').value.trim();
+  const pass = $('cfg-pass').value;
+  const ac = $('cfg-ac').value.trim();
+
+  if (!user) { toast('请填写用户名', 'err'); return; }
+  if (!pass) { toast('请填写密码', 'err'); return; }
+
+  const btn = $('cfg-save');
+  btn.disabled = true;
+  try {
+    await api('settings/fnos', { method: 'PUT', body: { user, pass, access_code: ac } });
+    toast('账号已保存', 'ok');
+    // 保存后立刻重探能力，让界面反映真实可用状态
+    await loadCapabilities(true);
+    await checkAuth();
+    refreshAll();
+  } catch (e) {
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function testFnCfg() {
+  const btn = $('cfg-test');
+  btn.disabled = true;
+  $('cfg-status').innerHTML = '<span class="spin"></span>测试中…';
+  try {
+    const d = await api('settings/fnos/test', { method: 'POST' });
+    $('cfg-status').innerHTML =
+      `<span class="tag ok">连接成功</span> uid=${esc(d.uid)} `
+      + (d.admin ? '<span class="tag pri">管理员</span>' : '');
+    toast('连接成功', 'ok');
+  } catch (e) {
+    $('cfg-status').innerHTML = `<span class="tag err">失败</span> ${esc(e.message)}`;
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ============================================================ 初始化
+
+async function refreshAll() {
+  await loadCapabilities();
+  await loadOverview();
+  const active = document.querySelector('.tab.on');
+  if (active) {
+    const t = active.dataset.tab;
+    if (t === 'proxy') await loadProxy();
+    if (t === 'certs') await loadCerts();
+    if (t === 'ddns') await loadDDNS();
+    if (t === 'settings') await loadSettings();
+  }
+}
+
+// ---------------------------------------------------------- 通用对话框
+//
+// ★ 为什么不用 toast：
+//   toast 3 秒就消失，且空间小。「证书需要先配 DDNS」这类带操作步骤的
+//   说明必须让用户看清楚、能复制、能点按钮跳过去，所以用对话框。
+
+function showDialog(title, bodyHtml, buttons) {
+  const old = $('dlg-mask');
+  if (old) old.remove();
+
+  const mask = document.createElement('div');
+  mask.className = 'mask on';
+  mask.id = 'dlg-mask';
+
+  const btns = (buttons && buttons.length ? buttons : [{ text: '知道了', pri: true }])
+    .map((b, i) => `<button class="${b.pri ? 'pri' : ''}" data-i="${i}">${esc(b.text)}</button>`)
+    .join('');
+
+  mask.innerHTML = `
+    <div class="modal" style="max-width:560px">
+      <header><h3>${esc(title)}</h3></header>
+      <div class="body" style="max-height:60vh;overflow:auto;font-size:13px;line-height:1.7">
+        ${bodyHtml}
+      </div>
+      <footer>${btns}</footer>
+    </div>`;
+
+  document.body.appendChild(mask);
+
+  mask.querySelectorAll('footer button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const i = parseInt(btn.dataset.i, 10);
+      const def = (buttons && buttons[i]) || {};
+      mask.remove();
+      if (typeof def.onClick === 'function') def.onClick();
+    });
+  });
+
+  mask.addEventListener('click', (e) => {
+    if (e.target === mask) mask.remove();
+  });
+
+  return mask;
+}
+
+// 证书 ↔ DDNS 关联的专用对话框：直接把「怎么补」讲清楚
+function showDdnsRequirementDialog(rawMsg, domains) {
+  const cn = (domains && domains[0]) || '';
+
+  // 从后端文案里抽出主域名（后端会写「本证书的主域名是：xxx」）
+  const m = /主域名是：\s*(\S+)/.exec(rawMsg || '');
+  const needDomain = m ? m[1] : cn;
+
+  const body = `
+    <div style="margin-bottom:14px;padding:10px;background:var(--bg2);
+                border-left:3px solid var(--warn);border-radius:4px">
+      <b>还没配好 DDNS 记录</b><br>
+      本次要签发的域名是 <b>${esc(needDomain)}</b>，
+      但飞牛 OS 的 DDNS 列表里没有这个域名的记录。
+    </div>
+
+    <div style="margin-bottom:10px">
+      <b>为什么必须先有 DDNS？</b><br>
+      证书通过 DNS-01 验证签发 —— 需要往 <code>_acme-challenge.${esc(needDomain)}</code>
+      写一条 TXT 记录来证明域名归你所有。
+      飞牛 OS 是拿「同名 DDNS 记录」里的服务商凭据去做这件事的，
+      所以 <b>证书主域名必须和某条 DDNS 记录的域名完全一致</b>。
+    </div>
+
+    <div style="margin-bottom:10px">
+      <b>接下来怎么做</b>
+      <ol style="margin:8px 0 0 20px;padding:0">
+        <li>点下面的「去添加 DDNS」</li>
+        <li>域名填 <code>${esc(needDomain)}</code></li>
+        <li>服务商选你的服务商，<b>填上 API 凭据</b>（这一步不能省）</li>
+        <li>保存后回到「证书」页重新申请</li>
+      </ol>
+    </div>
+
+    <details style="margin-top:12px">
+      <summary style="cursor:pointer;color:var(--tx2);font-size:12px">原始错误信息</summary>
+      <pre style="white-space:pre-wrap;font-size:11px;color:var(--tx2);
+                  background:var(--bg2);padding:8px;border-radius:4px;margin-top:6px">${esc(rawMsg)}</pre>
+    </details>`;
+
+  showDialog('签发前需要先添加 DDNS 记录', body, [
+    { text: '取消' },
+    {
+      text: '去添加 DDNS',
+      pri: true,
+      onClick: () => {
+        // 关掉证书弹窗，打开 DDNS 弹窗并预填域名
+        $('issue-mask').classList.remove('on');
+        resetIssueForm();
+        openDDNS();
+        setTimeout(() => {
+          const ta = $('d-domains');
+          if (ta) { ta.value = needDomain; ta.focus(); }
+          // 自动展开凭据区，因为这次必须填
+          const det = document.querySelector('#ddns-mask details');
+          if (det) det.open = true;
+        }, 120);
+      },
+    },
+  ]);
+}
+
+// 通用确认框（替换浏览器原生 confirm）
+//
+// ★ 为什么不用 window.confirm：
+//   原生弹窗样式和应用完全脱节，且在小窗口/移动端会挡住内容，
+//   体验很割裂。这里做成 Promise 版的自绘对话框。
+
+function showConfirm(opts) {
+  return new Promise((resolve) => {
+    const {
+      title = '请确认',
+      body = '',
+      okText = '确定',
+      cancelText = '取消',
+      danger = false,
+    } = opts || {};
+
+    const mask = document.createElement('div');
+    mask.className = 'mask on';
+
+    mask.innerHTML = `
+      <div class="modal" style="max-width:480px">
+        <header><h3>${esc(title)}</h3></header>
+        <div class="body" style="font-size:13px;line-height:1.7">${body}</div>
+        <footer>
+          <button data-act="cancel">${esc(cancelText)}</button>
+          <button class="${danger ? 'danger pri' : 'pri'}" data-act="ok">${esc(okText)}</button>
+        </footer>
+      </div>`;
+
+    document.body.appendChild(mask);
+
+    const finish = (val) => {
+      mask.remove();
+      resolve(val);
+    };
+
+    mask.querySelector('[data-act="ok"]').addEventListener('click', () => finish(true));
+    mask.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(false));
+    mask.addEventListener('click', (e) => {
+      if (e.target === mask) finish(false);   // 确认框点外面 = 取消
+    });
+    // Esc 也当取消
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        document.removeEventListener('keydown', onKey);
+        finish(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+
+    setTimeout(() => {
+      const b = mask.querySelector('[data-act="ok"]');
+      if (b) b.focus();
+    }, 50);
+  });
+}
+
+// 带表单的自绘对话框（替换浏览器原生 prompt）
+//
+// 返回 Promise：
+//   点确定 -> 返回 { 字段id: 值, ... }
+//   点取消 -> 返回 null
+//
+// fields: [{ id, label, type, value, min, max, placeholder, tip, options }]
+function showPrompt(opts) {
+  return new Promise((resolve) => {
+    const {
+      title = '请填写',
+      body = '',
+      fields = [],
+      okText = '确定',
+      cancelText = '取消',
+    } = opts || {};
+
+    const mask = document.createElement('div');
+    mask.className = 'mask on';
+
+    const fieldHtml = fields.map((f) => {
+      let input;
+      if (f.type === 'select') {
+        const opts2 = (f.options || []).map((o) =>
+          `<option value="${esc(o.value)}"${String(o.value) === String(f.value) ? ' selected' : ''}>${esc(o.label)}</option>`
+        ).join('');
+        input = `<select id="${esc(f.id)}">${opts2}</select>`;
+      } else {
+        const extra = [
+          f.min != null ? `min="${f.min}"` : '',
+          f.max != null ? `max="${f.max}"` : '',
+          f.placeholder ? `placeholder="${esc(f.placeholder)}"` : '',
+        ].filter(Boolean).join(' ');
+        input = `<input type="${f.type || 'text'}" id="${esc(f.id)}"
+                       value="${esc(f.value ?? '')}" ${extra}>`;
+      }
+      return `<div class="field">
+        <label>${esc(f.label || '')}</label>
+        ${input}
+        ${f.tip ? `<div class="tip">${esc(f.tip)}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    mask.innerHTML = `
+      <div class="modal" style="max-width:520px">
+        <header><h3>${esc(title)}</h3></header>
+        <div class="body">
+          ${body}
+          ${fieldHtml}
+        </div>
+        <footer>
+          <button data-act="cancel">${esc(cancelText)}</button>
+          <button class="pri" data-act="ok">${esc(okText)}</button>
+        </footer>
+      </div>`;
+
+    document.body.appendChild(mask);
+
+    const collect = () => {
+      const out = {};
+      fields.forEach((f) => {
+        const el = document.getElementById(f.id);
+        if (el) out[f.id] = el.value;
+      });
+      return out;
+    };
+
+    const finish = (val) => {
+      mask.remove();
+      resolve(val);
+    };
+
+    mask.querySelector('[data-act="ok"]').addEventListener('click', () => finish(collect()));
+    mask.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(null));
+
+    // 点外面不关闭（与全局策略一致），Esc 取消
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        document.removeEventListener('keydown', onKey);
+        finish(null);
+      } else if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+        document.removeEventListener('keydown', onKey);
+        finish(collect());
+      }
+    };
+    document.addEventListener('keydown', onKey);
+
+    setTimeout(() => {
+      const first = mask.querySelector('input, select');
+      if (first) { first.focus(); if (first.select) first.select(); }
+    }, 60);
+  });
+}
+
+// ---------------------------------------------------------- 弹窗关闭策略
+//
+// ★ 为什么不直接点外面就关：
+//   用户提过「点外面输入框会消失」—— 表单里有没提交的内容时，
+//   误点一下遮罩就把整张表单清空了，体验很差。
+//
+// 规则：
+//   * 有未保存内容（用户改过输入框）→ 点外面不关，给个提示
+//   * 表单是空的 → 允许点外面关闭
+//   * Esc 同样按这个规则
+//   * 签发/删除等耗时操作进行中 → 一律不关
+
+function maskHasUnsaved(mask) {
+  // 找出这个弹窗里所有输入框，看有没有非空内容
+  const inputs = mask.querySelectorAll('input, textarea, select');
+  for (const el of inputs) {
+    const v = (el.value || '').trim();
+    // select 的默认值不算「用户输入」
+    if (el.tagName === 'SELECT') continue;
+    if (v) return true;
+  }
+  return false;
+}
+
+function maskIsBusy(mask) {
+  const btn = mask.querySelector('button.pri[disabled]');
+  return !!btn;
+}
+
+function tryCloseMask(mask, reason) {
+  // 耗时操作进行中：一律不关
+  if (maskIsBusy(mask)) {
+    toast('操作正在进行，请等待完成', 'warn');
+    return false;
+  }
+
+  // ★ 点遮罩外面：**不关闭**。
+  //   用户明确要求「点外面不要消失」—— 表单填到一半误点一下就没了很恼火。
+  //   只有明确按「取消」按钮或 Esc 才关。
+  if (reason === 'click') return false;
+
+  mask.classList.remove('on');
+  return true;
+}
+
+document.querySelectorAll('.mask').forEach((m) => {
+  m.addEventListener('click', (e) => {
+    if (e.target !== m) return;      // 只有点在遮罩本身才处理
+    tryCloseMask(m, 'click');
+  });
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.mask.on').forEach((m) => {
+    tryCloseMask(m, 'esc');
+  });
+});
+
+// 初始化：先探测能力，再加载数据（横幅要最先出来）
+loadCapabilities().then(() => loadOverview());
+</script>
+</body>
+</html>

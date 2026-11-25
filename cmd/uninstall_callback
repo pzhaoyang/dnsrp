@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+# 卸载后：留痕。
+
+set -u
+
+LOG="${TRIM_TEMP_LOGFILE:-}"
+if [ -n "$LOG" ]; then
+    echo "DNS-RP 已卸载。fnOS 的证书与 DDNS 记录保持不变。" > "$LOG" 2>/dev/null || true
+fi
+
+echo "[DNS-RP] uninstall_callback: done"
+exit 0

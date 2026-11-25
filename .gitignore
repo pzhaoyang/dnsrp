@@ -1,0 +1,62 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ---- 打包产物 ----
+*.fpk
+*.tgz
+*.tar.gz
+*.zip
+_build_tmp/
+fn_fpk_packages/
+
+# ---- 运行时数据（含凭据，绝不能提交）----
+*.db
+*.sqlite
+*.sqlite3
+dnrp.conf
+dnrp.log
+dnrp.pid
+fnos.json
+*.sock
+
+# ---- 证书与密钥 ----
+*.pem
+*.key
+*.crt
+*.csr
+*.pfx
+*.p12
+!app/ui/images/*.png
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 临时文件 ----
+*.tmp
+*.bak
+*.orig
+*.rej
+*.log
+.cache/
+
+# ---- 本地调试脚本与备份 ----
+_*.sh
+_*.py
+*.local

@@ -1,0 +1,13 @@
+{
+    ".url": {
+        "DNS-RP.Application": {
+            "title": "DNS-RP 域名控制台",
+            "icon": "images/icon_{0}.png",
+            "type": "url",
+            "protocol": "http",
+            "port": "8765",
+            "url": "/",
+            "allUsers": true
+        }
+    }
+}

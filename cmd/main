@@ -1,0 +1,10 @@
+#!/bin/bash
+#
+# fnOS 生命周期入口。
+#
+# fnOS 约定：cmd/main 接受 start|stop|status。
+
+set -u
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+exec bash "${HERE}/start.sh" "$@"

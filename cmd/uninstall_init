@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# 卸载前：停止服务。
+#
+# 刻意**不删除**任何 fnOS 侧的东西：
+#   * 不删 fnOS 证书
+#   * 不删 fnOS DDNS 记录
+# 因为那些是用户通过 fnOS 管理的资产，卸载本应用不应波及。
+# 同时保留 www-data 成员关系（无害，且重装可直接复用）。
+
+set -u
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+. "${HERE}/common.sh" 2>/dev/null || true
+
+dnrp_log "========== uninstall_init =========="
+
+if [ -x "${HERE}/start.sh" ]; then
+    bash "${HERE}/start.sh" stop
+fi
+
+dnrp_log "保留 fnOS 侧的证书与 DDNS 记录（属于系统资产，不随本应用删除）"
+dnrp_log "========== uninstall_init 完成 =========="
+
+exit 0
