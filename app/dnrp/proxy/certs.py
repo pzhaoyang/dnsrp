@@ -310,17 +310,17 @@ def _fnos_cert_info() -> dict[str, dict]:
                                           └──────┬──────┘
                                             这就是 cert 表的 domain 字段
 
-    ★ 自动续签的两种来源（2026-11-25 实测）：
+    ★ 自动续签的三种来源（2026-11-25 实测）：
 
-      | source   | renewal | issuedBy      | 谁来续              |
-      |----------|---------|---------------|---------------------|
-      | upload   | 1       | YE1/YR1 (LE)  | fnOS ACME 定时任务  |
-      | trim     | 0       | YR1 (LE)      | FN Connect 服务     |
-      | system   | 0       | fnOS          | 自签，不会续        |
+      | source   | renewal | issuedBy      | 谁来续                  |
+      |----------|---------|---------------|-------------------------|
+      | upload   | 1       | YE1/YR1 (LE)  | fnOS ACME 定时任务      |
+      | trim     | 0       | YR1 (LE)      | FN Connect 服务         |
+      | system   | 0       | fnOS          | fnOS 定期重签自签证书   |
 
       注意 FN Connect 那张（source=trim）**renewal 是 0**，
-      它由 FN Connect 自己的服务续期，不走 cert_renew 表。
-      所以判断「会不会自动续」不能只看 renewal，要看 source。
+      自签兜底（source=system）也是 0，它们都不走 cert_renew 表，
+      但都会由 fnOS 自动续期。所以判断「会不会自动续」不能只看 renewal。
 
     拿不到就返回空 dict —— 删除/续期按钮显示为不可用，不影响其他功能。
     """
@@ -357,13 +357,25 @@ def _fnos_cert_info() -> dict[str, dict]:
                 renewal = int(row.get("renewal") or 0)
                 source = str(row.get("source") or "")
 
-                # 谁会续这张证书
+                # 谁会续这张证书（2026-11-25 实测）：
+                #
+                #  | source   | renewal | issuedBy | 谁来续                    |
+                #  |----------|---------|----------|---------------------------|
+                #  | upload   | 1       | YE1 (LE) | fnOS ACME 定时任务        |
+                #  | trim     | 0       | YR1 (LE) | FN Connect 服务           |
+                #  | system   | 0       | fnOS     | fnOS 定期重签自签证书     |
+                #
+                # system 那张自签证书 renewal=0、也没有 cert_renew 记录，
+                # 但它有 last_renew_time 且 ≈ valid_from（每约 3 个月重签一次），
+                # 说明 fnOS 会自动重新生成它 —— 所以也要算自动续签。
                 if renewal == 1:
                     renew_by = "acme"       # fnOS 的 ACME 定时任务
                 elif source == "trim":
                     renew_by = "fnconnect"  # FN Connect 服务
+                elif source == "system":
+                    renew_by = "system"     # fnOS 定期重签自签证书
                 else:
-                    renew_by = ""           # 自签 / 导入，不续
+                    renew_by = ""           # 用户手动导入，不续
 
                 out[dom] = {
                     "id": int(cid),

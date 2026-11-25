@@ -1279,22 +1279,19 @@ function renderCerts(rows) {
 
       let opCell;
       if (c.isFallback) {
-        opCell = '<span style="display:inline-flex;align-items:center;'
-          + 'color:var(--tx2);font-size:13px" '
+        opCell = '<span style="color:var(--tx2);font-size:14px" '
           + 'title="兜底证书是系统的安全网，不能删除也不能续期">兜底保护</span>';
       } else if (c.certId == null) {
-        opCell = '<span style="display:inline-flex;align-items:center;'
-          + 'color:var(--tx2);font-size:13px">—</span>';
+        opCell = '<span style="color:var(--tx2);font-size:14px">—</span>';
       } else if (!btns.length) {
-        opCell = '<span style="display:inline-flex;align-items:center;'
-          + 'color:var(--tx2);font-size:13px" '
+        opCell = '<span style="color:var(--tx2);font-size:14px" '
           + 'title="该域名仍在反向代理中使用，不能删除；也没有续签资格">使用中</span>';
       } else {
-        // 用 inline-flex + align-items:center 让按钮与文字垂直居中对齐
+        // 「使用中」与按钮里的字同为 14px，用 align-items:center 让两者基线对齐
         let cell = '<span style="display:inline-flex;align-items:center;gap:6px">'
           + btns.join('');
         if (inUse) {
-          cell += '<span style="color:var(--tx2);font-size:13px" '
+          cell += '<span style="color:var(--tx2);font-size:14px" '
             + 'title="该域名仍在反向代理中使用，需先删除规则才能删除证书">'
             + '使用中</span>';
         }
