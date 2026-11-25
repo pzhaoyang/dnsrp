@@ -2,5 +2,6 @@
     "defaults": {
         "run-as": "package"
     },
-    "capabilities": []
+    "capabilities": [],
+    "join-groups": ["www-data"]
 }
