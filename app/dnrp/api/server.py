@@ -313,6 +313,7 @@ class ApiApp:
         r.add("GET",  "/api/proxies",           self.h_proxies_list)
         r.add("POST", "/api/proxies",           self.h_proxies_create)
         r.add("PUT",  "/api/proxies/:id",       self.h_proxies_update)
+        r.add("POST", "/api/proxies/:id/toggle", self.h_proxies_toggle)
         r.add("DELETE", "/api/proxies/:id",     self.h_proxies_delete)
         r.add("POST", "/api/proxies/reload",    self.h_proxies_reload)
 
@@ -532,6 +533,40 @@ class ApiApp:
         store.upsert_proxy_rule(data)
         await self._reload_proxy()
         return Response.ok()
+
+    async def h_proxies_toggle(self, req: Request) -> Response:
+        """启用 / 禁用一条反代规则。
+
+        ★ 不用 PUT /api/proxies/:id 的原因：
+          PUT 会走 _validate_rule（同端口 TLS 一致性、保留端口等），
+          而这些校验对「只是开关一下」没有意义，还可能误伤。
+          这里直接读原规则、只改 enabled 字段、写回、重载引擎。
+
+        ★ 请求体可选 {"enabled": true|false}；
+          不传就按当前值取反（toggle）。
+        """
+        params = getattr(req, "params", {})
+        rule_id = int(params["id"])
+
+        rule = store.get_proxy_rule(rule_id)
+        if not rule:
+            return Response.error("规则不存在", 404)
+
+        try:
+            data = req.json()
+        except Exception:                  # noqa: BLE001
+            data = {}
+
+        if "enabled" in data:
+            new_enabled = bool(data["enabled"])
+        else:
+            new_enabled = not bool(rule.get("enabled"))
+
+        # 只改 enabled，其他字段原样保留
+        rule["enabled"] = new_enabled
+        store.upsert_proxy_rule(rule)
+        await self._reload_proxy()
+        return Response.ok({"id": rule_id, "enabled": new_enabled})
 
     async def h_proxies_delete(self, req: Request) -> Response:
         params = getattr(req, "params", {})

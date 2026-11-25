@@ -55,7 +55,11 @@ button.pri:hover{background:var(--pri-h);border-color:var(--pri-h);color:#fff}
 button.danger{background:var(--err);border-color:var(--err);color:#fff}
 button.danger:hover{filter:brightness(.92)}
 button.danger:active{filter:brightness(.85)}
-button.sm{padding:3px 10px;font-size:12px}
+button.sm,button.mini{padding:3px 10px;font-size:12px}
+button.ok-btn{background:#e8f7ee;border-color:#a8dfc0;color:#1a7a45}
+button.ok-btn:hover{background:#d5f0e2}
+button.off-btn{background:#f2f3f5;border-color:#d5d8dc;color:#8a8f96}
+button.off-btn:hover{background:#e8eaed}
 button:disabled{opacity:.5;cursor:not-allowed}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{
@@ -744,10 +748,12 @@ async function loadProxy() {
               <span class="tag ${r.listen_tls ? 'pri' : ''}">${r.listen_tls ? 'TLS' : 'HTTP'}</span>
             </td>
             <td class="mono">${esc(r.target_scheme)}://${esc(r.target_host)}:${esc(r.target_port)}</td>
-            <td>${r.enabled ? '<span class="tag ok">启用</span>' : '<span class="tag">停用</span>'}</td>
+            <td><button class="mini ${r.enabled ? 'ok-btn' : 'off-btn'}"
+              onclick="toggleRule(${esc(r.id)}, ${r.enabled ? 'false' : 'true'}, '${esc(r.name)}')"
+              title="点击${r.enabled ? '禁用' : '启用'}此规则">${r.enabled ? '● 启用' : '○ 停用'}</button></td>
             <td>
-              <button class="sm" onclick="openRule(${esc(r.id)})">编辑</button>
-              <button class="sm danger" onclick="delRule(${esc(r.id)}, '${esc(r.name)}')">删除</button>
+              <button class="mini" onclick="openRule(${esc(r.id)})">编辑</button>
+              <button class="mini danger" onclick="delRule(${esc(r.id)}, '${esc(r.name)}')">删除</button>
             </td>
           </tr>`).join('')}
         </tbody>
@@ -845,6 +851,41 @@ async function saveRule() {
     toast(e.message, 'err');
   } finally {
     btn.disabled = false;
+  }
+}
+
+// 启用 / 禁用反代规则
+//
+// ★ 用专门的 toggle 接口，不走 PUT：
+//   PUT 会跑完整校验（端口冲突、TLS 一致性），开关规则时不需要这些，
+//   而且可能因为历史规则的配置与当前校验规则冲突而无法开关。
+async function toggleRule(id, enable, name) {
+  const action = enable ? '启用' : '禁用';
+  const ok = await showConfirm({
+    title: `${action}反代规则`,
+    body: `
+      <div style="line-height:1.7">确认${action}规则「<b>${esc(name)}</b>」？</div>
+      <div style="margin-top:10px;color:var(--tx2);font-size:12px">
+        ${enable
+          ? '启用后，该规则的域名会立即按新配置转发。'
+          : '禁用后，该域名将不再被代理，访问会返回 404。'}
+      </div>`,
+    okText: action,
+  });
+  if (!ok) return;
+
+  try {
+    const r = await api('proxies/' + id + '/toggle', {
+      method: 'POST', body: { enabled: enable },
+    });
+    cacheDrop('proxies', 'overview');
+    toast(`✓ 已${action}`, 'ok');
+    loadProxy();
+    loadOverview();
+  } catch (e) {
+    showDialog(`${action}失败`, `
+      <div style="line-height:1.7;white-space:pre-wrap">${esc(e.message)}</div>`,
+      [{ text: '知道了', pri: true }]);
   }
 }
 
@@ -1233,7 +1274,7 @@ function renderCerts(rows) {
           + `'${esc(c.primaryDomain || c.host)}')">续期</button>`);
       }
       if (canDelete) {
-        btns.push(`<button class="mini" onclick="delCert(${c.certId}, `
+        btns.push(`<button class="mini danger" onclick="delCert(${c.certId}, `
           + `'${esc(c.primaryDomain || c.host)}')">删除</button>`);
       }
 
@@ -1264,13 +1305,8 @@ function renderCerts(rows) {
         <td class="mono">${esc(new Date(c.notAfter * 1000).toLocaleDateString())}${
           c.autoRenew
             ? '<div style="margin-top:3px"><span class="tag ok" '
-              + 'title="'
-              + (c.renewBy === 'fnconnect'
-                  ? '由飞牛 OS 的 FN Connect 服务自动续期'
-                  : '到期前飞牛 OS 会自动向 Let\'s Encrypt 续期')
-              + '">'
-              + (c.renewBy === 'fnconnect' ? '自动续签 · FN Connect' : '自动续签')
-              + '</span></div>'
+              + 'title="飞牛 OS 会自动续期这张证书，无需手动干预">'
+              + '自动续签</span></div>'
             : ''
         }</td>
         <td>${domCell}</td>
@@ -1500,7 +1536,7 @@ function renderDDNS(rows) {
           <td class="mono">${esc(r.updateInterval || r.update_interval || '-')} 分</td>
           <td style="white-space:nowrap">${capOk('ddns.write')
             ? `<button class="mini" onclick="editDDNS('${esc(r.domain)}', ${esc(r.updateInterval || r.update_interval || 5)})">编辑</button>
-               <button class="mini" onclick="delDDNS('${esc(r.domain)}')">删除</button>`
+               <button class="mini danger" onclick="delDDNS('${esc(r.domain)}')">删除</button>`
             : '<span style="color:var(--tx2);font-size:12px">只读</span>'}</td>
         </tr>`;
       }).join('')}
