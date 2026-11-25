@@ -758,11 +758,22 @@ class ApiApp:
                     return {"removed": False,
                             "reason": f"证书不存在: id={cert_id}"}
 
-                # ★ 第二道保护：兜底证书（isDefault=1）不给删
-                if target.get("isDefault"):
+                # ★ 第二道保护：系统证书一律不给删
+                #
+                # 实测（2026-11-25）：fnOS 的 cert.remove **不会拦截**
+                # FN Connect 专属证书（source=trim）和自签兜底（source=system）。
+                # 之前只挡了 isDefault，但 FN Connect 那张 isDefault=0，
+                # 会被误删，导致 FN Connect 远程访问失效。
+                #
+                # 所以按 source 判断：只有 upload（用户自己申请的）才可删。
+                src = str(target.get("source") or "")
+                if src in ("system", "trim") or target.get("isDefault"):
+                    why = {
+                        "system": "这是飞牛 OS 自签兜底证书，删除后未匹配域名将无证书可用。",
+                        "trim": "这是 FN Connect 专属证书，删除会中断 FN Connect 远程访问。",
+                    }.get(src, "这是默认/兜底证书，删除后所有未匹配域名会没有证书可用。")
                     return {"removed": False,
-                            "reason": "这是默认/兜底证书，删除后所有未匹配域名"
-                                      "会没有证书可用，已阻止。",
+                            "reason": why + " 已阻止。",
                             "blocked": True}
 
                 ok = cert_mgr.delete_cert(cli, cert_id)

@@ -736,7 +736,7 @@ async function loadProxy() {
     box.innerHTML = `
       <table>
         <thead><tr>
-          <th>名称</th><th>域名</th><th>监听</th><th>后端</th><th>状态</th><th style="width:190px;white-space:nowrap">操作</th>
+          <th>名称</th><th>域名</th><th>监听</th><th>后端</th><th>状态</th><th style="width:250px;white-space:nowrap">操作</th>
         </tr></thead>
         <tbody>
         ${rows.map((r) => `
@@ -965,7 +965,7 @@ function isCertReallyUsed(cert) {
 //   在用的证书**可以续期**（换新证书、有效期重置），只是不能删除。
 //
 // ★ 续期要重新走 ACME DNS-01，通常 25~120 秒，所以要给可见进度。
-async function renewCert(certId, label) {
+async function renewCert(certId, label, renewBy) {
   const ok = await showConfirm({
     title: '续期证书',
     body: `
@@ -975,12 +975,16 @@ async function renewCert(certId, label) {
         ${esc(label)}
       </div>
       <div style="color:var(--tx2);font-size:12px;line-height:1.8">
-        · 会向 Let's Encrypt 重新申请一张新证书<br>
-        · 有效期从今天重新计算 90 天<br>
-        · 域名和覆盖范围保持不变<br>
-        · 全程约 25~120 秒，需要 DNS 凭据有效
+        ${renewBy === 'system'
+          ? '· 会重新生成飞牛 OS 的自签证书<br>'
+            + '· 立即生效，不需要 DNS 凭据<br>'
+            + '· 几秒内完成'
+          : '· 会向 Let\'s Encrypt 重新申请一张新证书<br>'
+            + '· 有效期从今天重新计算 90 天<br>'
+            + '· 域名和覆盖范围保持不变<br>'
+            + '· 全程约 25~120 秒，需要 DNS 凭据有效'}
       </div>`,
-    okText: '开始续期',
+    okText: renewBy === 'system' ? '重新生成' : '开始续期',
   });
   if (!ok) return;
 
@@ -993,16 +997,20 @@ async function renewCert(certId, label) {
   const dlg = showDialog('正在续期', `
     <div style="text-align:center;padding:16px 0">
       <div class="spin" style="margin:0 auto 12px"></div>
-      <div>正在向 Let's Encrypt 重新申请证书</div>
+      <div>${renewBy === 'system' ? '正在重新生成飞牛 OS 自签证书'
+                                   : '正在向 Let\'s Encrypt 重新申请证书'}</div>
       <div style="color:var(--tx2);font-size:12px;margin-top:8px"
-           id="renew-elapsed">已等待 0 秒，通常需要 25~120 秒</div>
+           id="renew-elapsed">${renewBy === 'system'
+             ? '正在处理…' : '已等待 0 秒，通常需要 25~120 秒'}</div>
     </div>`, []);
 
   let sec = 0;
   const timer = setInterval(() => {
     sec += 1;
     const el = document.getElementById('renew-elapsed');
-    if (el) el.textContent = `已等待 ${sec} 秒，通常需要 25~120 秒`;
+    if (el && renewBy !== 'system') {
+      el.textContent = `已等待 ${sec} 秒，通常需要 25~120 秒`;
+    }
   }, 1000);
 
   try {
@@ -1264,39 +1272,49 @@ function renderCerts(rows) {
       //   在用的证书**可以续期**（换一张新的、有效期重置），
       //   只是不能删除。所以两个按钮分别判断。
       const inUse = isCertReallyUsed(c);
-      const autoRenew = !!c.autoRenew;
-      // ★ 只要有自动续签标识，就给「续期」按钮。
-      //   · acme / system 可以真正续期（走 cert.renew / cert.sysreset）
-      //   · fnconnect 会由后端明确报错提示「由 FN Connect 管理」
-      const canRenew = !c.isFallback && c.certId != null && autoRenew;
-      const canDelete = !c.isFallback && c.certId != null && !inUse;
+      const renewBy = c.renewBy || '';
+      const isSystem = !!c.isSystemCert;
+      // ★ 权限按证书来源区分（实测 fnOS 行为）：
+      //   acme      = 用户申请的多域名证书 -> 可续期、未被占用时可删除
+      //   system    = fnOS 自签兜底证书   -> 可续期(sysreset)、不可删除
+      //   fnconnect = FN Connect 专属证书 -> 不可续期、不可删除
+      const canRenew = c.certId != null
+        && (renewBy === 'acme' || renewBy === 'system');
+      const canDelete = c.certId != null && !isSystem && !inUse;
 
-      // ★ 续期和删除固定位置：
-      //   第 1 格永远是续期（可点/占位），第 2 格永远是删除（可点/占位）。
-      //   这样没有续期按钮时，删除不会跑到左边去。
+      // ★ 续期/删除位置固定：第 1 格永远续期、第 2 格永远删除。
+      //   64px 格宽要容得下 14px 按钮 + 6px 16px padding（约 62px），
+      //   否则按钮会溢出把「使用中」挤到下一行。
       const renewCell = canRenew
         ? `<button class="mini" onclick="renewCert(${c.certId}, `
-          + `'${esc(c.primaryDomain || c.host)}')">续期</button>`
-        : '<span style="display:inline-block;width:52px"></span>';
+          + `'${esc(c.primaryDomain || c.host)}', '${renewBy}')">续期</button>`
+        : '';
       const deleteCell = canDelete
         ? `<button class="mini danger" onclick="delCert(${c.certId}, `
           + `'${esc(c.primaryDomain || c.host)}')">删除</button>`
-        : '<span style="display:inline-block;width:52px"></span>';
+        : '';
 
       let opCell;
-      if (c.isFallback) {
-        opCell = '<span style="color:var(--tx2);font-size:14px" '
-          + 'title="兜底证书是系统的安全网，不能删除">兜底保护</span>';
-      } else if (c.certId == null) {
+      if (c.certId == null) {
         opCell = '<span style="color:var(--tx2);font-size:14px">—</span>';
+      } else if (!canRenew && !canDelete) {
+        // 系统证书（FN Connect）没有任何可用操作
+        const tip = renewBy === 'fnconnect'
+          ? 'FN Connect 专属证书，由飞牛 OS 自动管理，不能续期或删除'
+          : '系统证书，由飞牛 OS 管理';
+        opCell = '<span style="color:var(--tx2);font-size:14px" '
+          + `title="${tip}">系统管理</span>`;
       } else {
-        // 单元格用 flex 布局：两个固定宽度的按钮位 + 末尾的「使用中」。
-        // 「使用中」与按钮里的字同为 14px，靠 align-items:center 让文字基线对齐。
+        // flex 居中 + nowrap，让「使用中」与按钮里的字同一基线、同行显示
         let cell = '<span style="display:inline-flex;align-items:center;gap:4px;'
           + 'white-space:nowrap">'
-          + '<span style="display:inline-block;width:52px">' + renewCell + '</span>'
-          + '<span style="display:inline-block;width:52px">' + deleteCell + '</span>';
-        if (inUse) {
+          + '<span style="display:inline-block;width:64px">' + renewCell + '</span>'
+          + '<span style="display:inline-block;width:64px">' + deleteCell + '</span>';
+        if (renewBy === 'system') {
+          cell += '<span style="color:var(--tx2);font-size:14px;margin-left:2px" '
+            + 'title="fnOS 自签兜底证书，可重新生成但不能删除">'
+            + '系统证书</span>';
+        } else if (inUse) {
           cell += '<span style="color:var(--tx2);font-size:14px;margin-left:2px" '
             + 'title="该域名仍在反向代理中使用，需先删除规则才能删除证书">'
             + '使用中</span>';
