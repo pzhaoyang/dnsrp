@@ -1,4 +1,4 @@
-"""DNS-RP 配置与路径常量。
+"""dnsrp 配置与路径常量。
 
 所有路径都从环境变量推导，便于本地调试与真机运行共用。
 """
@@ -13,7 +13,7 @@ log = logging.getLogger("dnrp.config")
 
 # ---------------------------------------------------------------- 应用自身路径
 
-APP_NAME = "DNS-RP"
+APP_NAME = "dnsrp"
 
 # fnOS 生命周期脚本注入；本地调试时回退到当前目录
 TRIM_PKGVAR = os.environ.get("TRIM_PKGVAR")
@@ -79,25 +79,25 @@ def read_manifest() -> dict[str, str]:
 
     ★ fnOS 的实际目录布局（实测 2026-11-24）：
 
-        /var/apps/DNS-RP/                ← 应用根，manifest 在这里
+        /var/apps/dnsrp/                ← 应用根，manifest 在这里
             ├── manifest
             ├── cmd/  config/  ICON*
-            └── target -> /vol1/@appcenter/DNS-RP   ← 代码在这（TRIM_APPDEST）
+            └── target -> /vol1/@appcenter/dnsrp   ← 代码在这（TRIM_APPDEST）
 
       也就是说 manifest 在 APPDEST 的**上一级**（对于软链布局），
       但 APPDEST 不是软链时 manifest 又可能就在 APPDEST 里。
       所以两个位置都要试。
 
-    ★ 权限：/vol1/@appcenter/DNS-RP/manifest 应用用户**读不到**
+    ★ 权限：/vol1/@appcenter/dnsrp/manifest 应用用户**读不到**
       （属主 root，0644 但父目录限制），
-      而 /var/apps/DNS-RP/manifest 可读。这也是必须加候选路径的原因。
+      而 /var/apps/dnsrp/manifest 可读。这也是必须加候选路径的原因。
     """
     out: dict[str, str] = {}
 
     candidates: list[Path] = []
 
     # 1) /var/apps/<appname>/manifest —— 实测最可靠
-    candidates.append(Path("/var/apps/DNS-RP/manifest"))
+    candidates.append(Path("/var/apps/dnsrp/manifest"))
 
     # 2) APPDEST 的上一级（软链布局下这里才是根）
     try:

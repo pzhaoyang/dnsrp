@@ -4,7 +4,7 @@
   之前 fnos-multidomain-cert / fnos-ddns 那两个脚本要用户名密码，
   是因为它们跑在 SSH 里，**没有 Web 会话**。
 
-  但 DNS-RP 是正规 fpk，运行在 fnOS 的 CGI 环境里，
+  但 dnsrp 是正规 fpk，运行在 fnOS 的 CGI 环境里，
   nginx 会把浏览器的 Cookie 通过 HTTP_COOKIE 环境变量传给 CGI。
   用户已经在飞牛 OS 网页登录过，所以这里天然能拿到会话凭证。
 

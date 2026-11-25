@@ -8,7 +8,7 @@ set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "${HERE}/common.sh" 2>/dev/null || {
-    echo "[DNS-RP] 无法加载 common.sh"
+    echo "[dnsrp] 无法加载 common.sh"
     exit 0
 }
 
@@ -57,7 +57,7 @@ fi
 CONF="${PKGVAR}/dnrp.conf"
 if [ ! -f "$CONF" ]; then
     cat > "$CONF" <<'EOF'
-# DNS-RP 默认配置
+# dnsrp 默认配置
 # 反代监听端口刻意避开 fnOS 系统端口（80/443/16666/16667）
 default_listen_port = 8080
 EOF
@@ -68,6 +68,6 @@ if [ ! -f "$PKGVAR/dnrp.db" ]; then
     dnrp_log "数据库尚未创建，首次启动时生成"
 fi
 
-dnrp_log "提示：请到应用中心启动 DNS-RP，然后打开界面配置反代规则"
+dnrp_log "提示：请到应用中心启动 dnsrp，然后打开界面配置反代规则"
 dnrp_log "========== install_callback 完成 =========="
 exit 0

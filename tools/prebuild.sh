@@ -1,8 +1,8 @@
 #!/bin/bash
-# 打包 DNS-RP 为 fnOS fpk
+# 打包 dnsrp 为 fnOS fpk
 
 set -eu
-W=/mnt/c/work/dsh-workspace/DNS-RP
+W=/mnt/c/work/dsh-workspace/dnsrp
 OUT=/mnt/c/work/dsh-workspace
 
 cd "$W"

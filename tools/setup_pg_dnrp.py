@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""为 DNS-RP 应用配置 PostgreSQL 只读+DDNS 写权限。
+"""为 dnsrp 应用配置 PostgreSQL 只读+DDNS 写权限。
 
 改动三处：
   1. 创建 PG 角色 dnsrp（无 superuser、无 createdb）
-  2. pg_ident.conf 加映射：OS 用户 DNS-RP -> PG 角色 dnsrp
+  2. pg_ident.conf 加映射：OS 用户 dnsrp -> PG 角色 dnsrp
   3. pg_hba.conf 在兜底 md5 规则**之前**插入 peer 规则
 
 用法：
@@ -22,15 +22,15 @@ HBA = "/etc/postgresql/15/main/pg_hba.conf"
 IDENT = "/etc/postgresql/15/main/pg_ident.conf"
 STAMP = time.strftime("%Y%m%d-%H%M%S")
 
-OS_USER = "DNS-RP"
+OS_USER = "dnsrp"
 PG_ROLE = "dnsrp"
 MAP_NAME = "dnsrp_local"
 
 HBA_LINE = f"local   trim_connect    {PG_ROLE:<20}                        peer map={MAP_NAME}"
 IDENT_LINE = f"{MAP_NAME:<14}{OS_USER:<14}{PG_ROLE}"
 
-MARK_BEGIN = "# --- DNS-RP app access (added by DNS-RP fpk) ---"
-MARK_END = "# --- end DNS-RP ---"
+MARK_BEGIN = "# --- dnsrp app access (added by dnsrp fpk) ---"
+MARK_END = "# --- end dnsrp ---"
 
 
 def run(cmd, **kw):
@@ -164,7 +164,7 @@ def main():
     r = run(["sudo", "-n", "systemctl", "reload", "postgresql"])
     print(f"  {r.stdout.strip() or r.stderr.strip() or 'OK'}")
 
-    print("\n=== 7. 验证（以 DNS-RP 用户身份连库） ===")
+    print("\n=== 7. 验证（以 dnsrp 用户身份连库） ===")
     r = run(["sudo", "-n", "-u", OS_USER, "psql", "-U", PG_ROLE,
              "-d", "trim_connect", "-A", "-t", "-c",
              "select count(*) from d_dns_record;"])

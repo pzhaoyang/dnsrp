@@ -1,6 +1,6 @@
 set -eu
 R="$HOME/.dnrp-bin/rssh.sh"
-W=/mnt/c/work/dsh-workspace/DNS-RP
+W=/mnt/c/work/dsh-workspace/dnsrp
 D=/tmp/dnrp-full
 
 echo "=== 1. 重建目录 ==="

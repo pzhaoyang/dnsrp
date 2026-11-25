@@ -1,4 +1,4 @@
-# DNS-RP · 飞牛 OS 反向代理控制台
+# dnsrp · 飞牛 OS 反向代理控制台
 
 > 一体化域名控制台：**反向代理 + 证书管理 + DDNS**，全部复用飞牛 OS（fnOS）自有能力。
 > 不抢占 80/443、不需要 root、不复制证书、不接管 DDNS 上报。
@@ -16,7 +16,7 @@
 - 有多个子域名，想用同一张多域名证书
 - 想看清「某个域名」的证书、DDNS、反代三者状态
 
-**DNS-RP 做的事**：把这三件事放到一个界面里，但底层全部走飞牛 OS——
+**dnsrp 做的事**：把这三件事放到一个界面里，但底层全部走飞牛 OS——
 
 | 能力 | 实现方式 |
 |---|---|
@@ -71,7 +71,7 @@ fnOS 的内部接口不是公开 API，可能随版本变化。本应用做了�
 
 ### 步骤
 
-1. 下载 `DNS-RP_x.y.z_all.fpk`
+1. 下载 `dnsrp_x.y.z_all.fpk`
 2. 飞牛 OS → **应用中心** → 右上角「手动安装」→ 选择 fpk
 3. 安装完成后启动
 4. 打开应用 → **设置** → 填写飞牛 OS 用户名和密码
@@ -88,7 +88,7 @@ fnOS 的内部接口不是公开 API，可能随版本变化。本应用做了�
 ## 项目结构
 
 ```
-DNS-RP/
+dnsrp/
 ├── manifest               应用元信息（名称、版本、平台）
 ├── config/
 │   ├── privilege          run-as: package，无特权能力
@@ -209,7 +209,7 @@ sslobj.context = new_ctx    # 不能改共享的 context
 # 注意：TMP 必须指向项目目录之外，否则 fnpack 会递归复制
 export TMP=/path/outside/project/_build_tmp
 cd /path/to/fn_fpk_packages
-./fnpack.exe build --directory /path/to/DNS-RP
+./fnpack.exe build --directory /path/to/dnsrp
 ```
 
 ### 预检

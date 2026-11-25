@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# DNS-RP 启动/停止脚本
+# dnsrp 启动/停止脚本
 #
 # 用法: main {start|stop|restart|status}
 #
@@ -11,7 +11,7 @@ set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=common.sh
 . "${HERE}/common.sh" 2>/dev/null || {
-    echo "[DNS-RP] 无法加载 common.sh"
+    echo "[dnsrp] 无法加载 common.sh"
     exit 1
 }
 

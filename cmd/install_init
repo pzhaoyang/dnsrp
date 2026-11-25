@@ -13,7 +13,7 @@ set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "${HERE}/common.sh" 2>/dev/null || {
-    echo "[DNS-RP] 无法加载 common.sh，跳过安装前准备"
+    echo "[dnsrp] 无法加载 common.sh，跳过安装前准备"
     exit 0
 }
 

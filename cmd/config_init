@@ -3,5 +3,5 @@
 # 配置变更前：无前置动作。
 
 set -u
-echo "[DNS-RP] config_init: no-op"
+echo "[dnsrp] config_init: no-op"
 exit 0

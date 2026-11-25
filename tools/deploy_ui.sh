@@ -18,9 +18,9 @@ set -euo pipefail
 HOST="${DNRP_HOST:?请设置 DNRP_HOST}"
 USER="${DNRP_USER:?请设置 DNRP_USER}"
 PORT="${DNRP_SSH_PORT:-2705}"
-APP="/vol1/@appcenter/${DNRP_APPNAME:-DNS-RP}"
-VAR="/vol1/@appdata/${DNRP_APPNAME:-DNS-RP}"
-PKGNAME="${DNRP_APPNAME:-DNS-RP}"
+APP="/vol1/@appcenter/${DNRP_APPNAME:-dnsrp}"
+VAR="/vol1/@appdata/${DNRP_APPNAME:-dnsrp}"
+PKGNAME="${DNRP_APPNAME:-dnsrp}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMPTGZ="$(mktemp -t dnrp-XXXXXX.tgz)"

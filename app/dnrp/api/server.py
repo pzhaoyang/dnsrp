@@ -1,4 +1,4 @@
-"""DNS-RP 的 HTTP API（跑在 unix socket 上）。
+"""dnsrp 的 HTTP API（跑在 unix socket 上）。
 
 刻意不用第三方框架：只依赖标准库，用 asyncio 手写一个极简路由器。
 理由：
@@ -887,7 +887,7 @@ class ApiApp:
 
         email = (data.get("email") or "").strip()
         ecc = bool(data.get("ecc"))
-        desc = (data.get("desc") or "DNS-RP").strip()[:64]
+        desc = (data.get("desc") or "dnsrp").strip()[:64]
         ddns_id = data.get("ddns_id")
         twofa = (data.get("twofa") or "").strip()
 

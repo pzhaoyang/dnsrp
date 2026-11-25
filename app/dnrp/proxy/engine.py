@@ -1,4 +1,4 @@
-"""DNS-RP 反向代理引擎。
+"""dnsrp 反向代理引擎。
 
 设计要点：
   * 每个监听端口一个 asyncio server；同端口按 Host/SNI 分流。

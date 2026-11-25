@@ -1,5 +1,5 @@
 #!/bin/bash
-# DNS-RP 的 CGI 网关
+# dnsrp 的 CGI 网关
 #
 # 职责：
 #   1. /api/*  → 转发到本地 unix socket（dnrp 主控进程）
@@ -11,9 +11,9 @@
 
 set -u
 
-APP_ROOT="${TRIM_APPDEST:-/var/apps/DNS-RP/target}"
+APP_ROOT="${TRIM_APPDEST:-/var/apps/dnsrp/target}"
 BASE_PATH="${APP_ROOT}/www"
-SOCKET="${TRIM_PKGVAR:-/var/apps/DNS-RP/var}/dnrp.sock"
+SOCKET="${TRIM_PKGVAR:-/var/apps/dnsrp/var}/dnrp.sock"
 
 REQUEST_METHOD="${REQUEST_METHOD:-GET}"
 REQUEST_URI="${REQUEST_URI:-/}"
@@ -180,7 +180,7 @@ proxy_api() {
     # 后端未启动时给出可读提示，而不是裸 502
     if [ ! -S "$SOCKET" ]; then
         send_text "503 Service Unavailable" \
-            "DNS-RP 主控进程未运行（socket 不存在：$SOCKET）。请在应用中心启动本应用。"
+            "dnsrp 主控进程未运行（socket 不存在：$SOCKET）。请在应用中心启动本应用。"
     fi
 
     curl --unix-socket "$SOCKET" "${args[@]}" "$url"

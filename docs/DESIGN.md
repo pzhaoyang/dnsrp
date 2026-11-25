@@ -1,6 +1,6 @@
-# DNS-RP 设计文档（v0.1 草案）
+# dnsrp 设计文档（v0.1 草案）
 
-> 项目名：**DNS-RP**（DNS · Reverse Proxy）
+> 项目名：**dnsrp**（DNS · Reverse Proxy）
 > 目标平台：fnOS（飞牛 OS）
 > 设计日期：2026-11-19
 > 测试设备：nas（fnOS 1.2.1011 / kernel 6.18.18.c1191-trim / aarch64）
@@ -17,7 +17,7 @@
 | 证书申请 | fnOS ACME 引擎（Let's Encrypt + DNS-01） | 不用自己实现 ACME 客户端 |
 | DDNS | fnOS `trim_connect` 的 DDNS 定时任务 | 不用自己写 IP 检测/上报 |
 
-**核心思路：DNS-RP 只做「编排层」，所有脏活交给 fnOS。**
+**核心思路：dnsrp 只做「编排层」，所有脏活交给 fnOS。**
 
 一句话概括三者关系：
 
@@ -58,7 +58,7 @@ DDNS 保证域名解析到本机
 
 ### 2.3 隐含需求（从三个项目的问题反推）
 
-| 现象 | 本质 | DNS-RP 要解决的 |
+| 现象 | 本质 | dnsrp 要解决的 |
 |---|---|---|
 | `fn-reverseproxy` 抢 80、读不到证书 | 不该用系统端口，不该绕过证书系统 | **一律用高位端口，只用 fnOS 证书路径** |
 | `certs.map is not a function` | 前端/后端版本错配 | **前后端同包发布，单一数据源** |
@@ -74,7 +74,7 @@ DDNS 保证域名解析到本机
 
 **以「域名」为主键，把三件事串起来。**
 
-现有三个工具各自维护域名，容易不一致。DNS-RP 引入一张「域名总表」，反代规则/证书/DDNS 都引用它。
+现有三个工具各自维护域名，容易不一致。dnsrp 引入一张「域名总表」，反代规则/证书/DDNS 都引用它。
 
 ### 3.2 主数据：Domain
 
@@ -87,7 +87,7 @@ Domain（域名）
 └── proxy_rules[]   用此域名的反代规则
 ```
 
-### 3.3 三张功能表（DNS-RP 自有，存 SQLite）
+### 3.3 三张功能表（dnsrp 自有，存 SQLite）
 
 **表 1：ddns**（映射到 fnOS 的 `d_dns_record`）
 
@@ -100,7 +100,7 @@ Domain（域名）
 | enabled | 是否启用 |
 | last_status | 同步 fnOS 的状态（suc/err） |
 
-**设计取舍**：DNS-RP **不存凭据**。凭据留在 fnOS 表里，DNS-RP 只记录「我用哪条模板记录的凭据」：
+**设计取舍**：dnsrp **不存凭据**。凭据留在 fnOS 表里，dnsrp 只记录「我用哪条模板记录的凭据」：
 
 ```
 template_record_id  →  d_dns_record.id（同根域的已有记录）
@@ -119,7 +119,7 @@ template_record_id  →  d_dns_record.id（同根域的已有记录）
 | auto_renew | 是否续签（对应 `cert_renew`） |
 | status | 有效 / 即将过期 / 失败 |
 
-**表 3：proxy_rule**（DNS-RP 独有）
+**表 3：proxy_rule**（dnsrp 独有）
 
 | 字段 | 说明 |
 |---|---|
@@ -167,7 +167,7 @@ template_record_id  →  d_dns_record.id（同根域的已有记录）
 │                    浏览器（fnOS 应用中心内嵌）              │
 │  www/index.html  (单页应用，原生 JS，无构建步骤)            │
 └───────────────────────┬──────────────────────────────────┘
-                        │ /cgi/ThirdParty/DNS-RP/index.cgi/api/*
+                        │ /cgi/ThirdParty/dnsrp/index.cgi/api/*
                         ▼
 ┌──────────────────────────────────────────────────────────┐
 │  index.cgi（CGI 网关，bash）                               │
@@ -275,8 +275,8 @@ def sni_callback(sslobj, servername, ctx):
 - 2FA：非交互环境需要 `FNOS_2FA_CODE`，**不适合定时任务**
 
 **设计取舍**：
-- **证书过期自动续签交给 fnOS**（`renewal=1`），DNS-RP 不做定时续签
-- DNS-RP 只在「用户主动点签发」时才调 WS API
+- **证书过期自动续签交给 fnOS**（`renewal=1`），dnsrp 不做定时续签
+- dnsrp 只在「用户主动点签发」时才调 WS API
 - 2FA 在 UI 里做一个输入框，用户当场输入
 
 ### 4.5 DDNS 管理：写数据库 + 等 fnOS 定时任务
@@ -284,7 +284,7 @@ def sni_callback(sslobj, servername, ctx):
 ```
 用户添加域名
     ↓
-DNS-RP 校验：同根域是否已有记录（有则取模板凭据）
+dnsrp 校验：同根域是否已有记录（有则取模板凭据）
     ↓
 INSERT INTO d_dns_record (...复制模板的 access_key/access_secret...)
     ↓
@@ -292,7 +292,7 @@ fnOS 的 gocron 定时任务（按 update_interval，默认 5 分钟）
     ↓
 自动检测公网 IP → 调 Cloudflare/AliDNS API 更新
     ↓
-DNS-RP 轮询 fnOS 表的 status 字段，回显给 UI
+dnsrp 轮询 fnOS 表的 status 字段，回显给 UI
 ```
 
 **已实测验证**（见第六节）：复用同根域凭据可行，1 分钟内生效。
@@ -300,14 +300,14 @@ DNS-RP 轮询 fnOS 表的 status 字段，回显给 UI
 **跨根域限制**（实测自 DDNS 项目 README）：
 - 数据库能插入成功
 - 但 fnOS 上报会失败（凭据不属于该根域）
-- **DNS-RP 的 UI 要明确提示**：新根域必须先在 fnOS 原生界面加一条
+- **dnsrp 的 UI 要明确提示**：新根域必须先在 fnOS 原生界面加一条
 
 ---
 
 ## 五、目录结构设计
 
 ```
-DNS-RP/
+dnsrp/
 ├── manifest                    # fnOS 应用清单
 ├── ICON.PNG / ICON_256.PNG
 ├── config/
@@ -521,7 +521,7 @@ INSERT INTO d_dns_record (...) SELECT ..., '$TESTDOM', ...,
 ```
 fn-reverseproxy  ──┐
                    │  反代 UI 骨架、index.cgi 思路、生命周期脚本模式
-                   ├──▶  DNS-RP
+                   ├──▶  dnsrp
 fnos-multidomain  ─┤  WS 客户端、证书签发编排、种子证书方案
 fnos-ddns        ──┘  d_dns_record 表结构、模板凭据方案
 

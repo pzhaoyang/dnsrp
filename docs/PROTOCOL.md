@@ -1,6 +1,6 @@
 # fnOS 内部接口协议备忘
 
-> 本文档记录 DNS-RP 依赖的 fnOS 内部接口，**全部来自 nas 实测**。
+> 本文档记录 dnsrp 依赖的 fnOS 内部接口，**全部来自 nas 实测**。
 > 仅供本项目使用，不保证跨版本稳定。
 
 ---
@@ -40,7 +40,7 @@ CREATE TABLE d_dns_record (
 3. 实测：复制同根域记录的 `access_secret` 到新记录，**80 秒内 fnOS 定时任务完成上报，status=suc**
 4. 跨根域复制：数据库插入成功，但 fnOS 上报会失败（Token 不属于该域名）
 
-**DNS-RP 的用法**：
+**dnsrp 的用法**：
 ```sql
 -- 新增记录：从同根域的已有记录复制凭据
 INSERT INTO d_dns_record
@@ -300,7 +300,7 @@ frame = base64( HMAC-SHA256( json, secret_bytes ) ) + json
 **唯一官方开关**：`/usr/trim/etc/network_gateway_setting.conf` 的 `redirect` 字段。
 设为 `false` 可让 nginx 放弃 80/443，但会**失去 `http://<host>` 跳转**。
 
-### 4.2 DNS-RP 的策略
+### 4.2 dnsrp 的策略
 
 **不使用 80/443**，只用 8080+。
 
@@ -320,7 +320,7 @@ frame = base64( HMAC-SHA256( json, secret_bytes ) ) + json
 
 fnOS 用它们加密 `access_secret` 等敏感字段。
 
-**DNS-RP 不解密、不存储这些密钥** —— 直接复制密文即可（已实测可用）。
+**dnsrp 不解密、不存储这些密钥** —— 直接复制密文即可（已实测可用）。
 
 ---
 

@@ -1,5 +1,5 @@
 set -u
-FPK=/mnt/c/work/dsh-workspace/RP/fn_fpk_packages/DNS-RP.fpk
+FPK=/mnt/c/work/dsh-workspace/RP/fn_fpk_packages/dnsrp.fpk
 
 echo "=== 产物 ==="
 ls -la "$FPK"

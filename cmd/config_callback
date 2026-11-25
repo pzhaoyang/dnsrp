@@ -3,5 +3,5 @@
 # 配置变更后：无后置动作。
 
 set -u
-echo "[DNS-RP] config_callback: no-op"
+echo "[dnsrp] config_callback: no-op"
 exit 0

@@ -8,7 +8,7 @@ import base64
 import json
 import time
 
-sys.path.insert(0, "/vol1/@appcenter/DNS-RP")
+sys.path.insert(0, "/vol1/@appcenter/dnsrp")
 from dnrp.certs.ws_client import FnosClient
 from dnrp.certs import seed
 
@@ -50,7 +50,7 @@ print(f"\n=== 需要修复 {len(need_fix)} 张 ===")
 for cert in need_fix:
     cid = cert["id"]
     dom = cert.get("domain", "")
-    desc = cert.get("des") or "DNS-RP"
+    desc = cert.get("des") or "dnsrp"
 
     # 找该证书的签发目录
     d = seed.find_issued_dir(dom, 0)

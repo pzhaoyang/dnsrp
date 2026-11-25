@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# DNS-RP 公共函数库
+# dnsrp 公共函数库
 #
 # 设计前提（均已实测）：
 #   1. 应用以 package 身份运行，不使用 root、不申请特权能力
@@ -10,14 +10,14 @@
 #
 # 本文件只定义函数，不产生副作用。
 
-APP_NAME="DNS-RP"
-APP_USER="DNS-RP"
+APP_NAME="dnsrp"
+APP_USER="dnsrp"
 APP_GROUP="www-data"
 
 FNOS_SSL_ROOT="/usr/trim/var/trim_connect/ssls"
 FNOS_CERT_REGISTRY="/usr/trim/etc/network_gateway_cert.conf"
 
-dnrp_log() { echo "[DNS-RP] $*"; }
+dnrp_log() { echo "[dnsrp] $*"; }
 
 # ---------------------------------------------------------------- 目录推导
 

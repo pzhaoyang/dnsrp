@@ -158,7 +158,7 @@ def issue_cert(
                 "domain": domains[0],
                 "renewEmail": email,
                 "relatedDDNSId": ddns_id,
-                "des": desc or "DNS-RP",
+                "des": desc or "dnsrp",
             })
             cid = (data or {}).get("id") if isinstance(data, dict) else None
             return {
@@ -184,7 +184,7 @@ def issue_cert(
     key_b64 = _b64.b64encode(key_pem.encode()).decode()
 
     started = time.time()
-    desc_final = desc or "DNS-RP"
+    desc_final = desc or "dnsrp"
 
     # 1) 上传种子证书
     # ★ 参数名必须精确：privateKeyBase64 / certificateBase64 /
@@ -528,7 +528,7 @@ def _fix_renewal_flag(api: FnosClient, cert_id: Any, cert: dict[str, Any],
         "privateKeyBase64": _b64.b64encode(key_pem.encode()).decode(),
         "certificateBase64": _b64.b64encode(cert_pem.encode()).decode(),
         "issuerCertificateBase64": "",
-        "desc": cert.get("des") or "DNS-RP",
+        "desc": cert.get("des") or "dnsrp",
         "id": int(cert_id),
         "isDefault": int(cert.get("isDefault") or 0),
         "privateKeyPath": "",

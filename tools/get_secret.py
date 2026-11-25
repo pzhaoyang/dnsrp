@@ -20,7 +20,7 @@ import os
 import sys
 
 # 假定应用已安装在默认位置；也可通过 PYTHONPATH 指定
-sys.path.insert(0, os.environ.get("DNRP_APP", "/vol1/@appcenter/DNS-RP"))
+sys.path.insert(0, os.environ.get("DNRP_APP", "/vol1/@appcenter/dnsrp"))
 
 from dnrp.certs.ws_client import FnosClient   # noqa: E402
 

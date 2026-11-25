@@ -202,7 +202,7 @@ def _probe_cert_read() -> tuple[bool, str]:
     if tried and readable == 0:
         return False, (
             "证书文件不可读。应用用户需要加入 www-data 组："
-            "sudo usermod -aG www-data DNS-RP"
+            "sudo usermod -aG www-data dnsrp"
         )
 
     return True, ""

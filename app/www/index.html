@@ -368,7 +368,7 @@ tbody tr:hover{background:#fafbfc}
       </div>
       <div class="field">
         <label>备注</label>
-        <input type="text" id="i-desc" value="DNS-RP" maxlength="64">
+        <input type="text" id="i-desc" value="dnsrp" maxlength="64">
       </div>
       <div class="field">
         <label>Let's Encrypt 通知邮箱（可选）</label>
@@ -1718,7 +1718,7 @@ async function openIssue() {
   }
 
   $('i-domains').value = '';
-  $('i-desc').value = 'DNS-RP';
+  $('i-desc').value = 'dnsrp';
   $('i-email').value = '';
   $('i-ecc').value = '0';
   $('i-twofa').value = '';
@@ -1767,7 +1767,7 @@ function resetIssueForm() {
   // 清空表单，避免下次打开看到上次的残留
   const f = (id) => $(id);
   if (f('i-domains')) f('i-domains').value = '';
-  if (f('i-desc')) f('i-desc').value = 'DNS-RP';
+  if (f('i-desc')) f('i-desc').value = 'dnsrp';
   if (f('i-email')) { f('i-email').value = ''; f('i-email').disabled = false; }
   if (f('i-twofa')) f('i-twofa').value = '';
   if (f('f-twofa')) f('f-twofa').style.display = 'none';
@@ -1828,7 +1828,7 @@ async function submitIssue() {
   try {
     const body = {
       domains,
-      desc: $('i-desc').value.trim() || 'DNS-RP',
+      desc: $('i-desc').value.trim() || 'dnsrp',
       email: $('i-email').disabled ? '' : $('i-email').value.trim(),
       ecc: $('i-ecc').value === '1',
       ddns_id: $('i-ddns').value || null,

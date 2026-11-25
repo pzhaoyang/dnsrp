@@ -1,4 +1,4 @@
-"""DNS-RP 主程序入口。
+"""dnsrp 主程序入口。
 
 启动顺序：
   1. 初始化 SQLite
@@ -77,7 +77,7 @@ async def run(verbose: bool = False) -> int:
     log = logging.getLogger("dnrp")
 
     log.info("=" * 56)
-    log.info("DNS-RP 启动中  (uid=%d, pid=%d)", os.getuid(), os.getpid())
+    log.info("dnsrp 启动中  (uid=%d, pid=%d)", os.getuid(), os.getpid())
     log.info("数据目录: %s", config.PKGVAR)
 
     # 1. 数据库
@@ -122,7 +122,7 @@ async def run(verbose: bool = False) -> int:
             signal.signal(sig, lambda *_: stop.set())
 
     write_pid()
-    log.info("DNS-RP 已就绪")
+    log.info("dnsrp 已就绪")
 
     try:
         await stop.wait()
@@ -144,7 +144,7 @@ async def run(verbose: bool = False) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="dnrp", description="DNS-RP 主控进程")
+    ap = argparse.ArgumentParser(prog="dnrp", description="dnsrp 主控进程")
     ap.add_argument("-v", "--verbose", action="store_true", help="调试日志")
     ap.add_argument("--check", action="store_true", help="只做环境自检后退出")
     args = ap.parse_args(argv)
@@ -164,7 +164,7 @@ def do_check() -> int:
     from .proxy import certs as cert_mod
 
     print("=" * 60)
-    print("DNS-RP 环境自检")
+    print("dnsrp 环境自检")
     print("=" * 60)
 
     # 自检时顺带建目录，方便首次部署

@@ -129,7 +129,7 @@ def draw(size: int, ss: int = 4) -> Image.Image:
 
 
 def main():
-    root = "/mnt/c/work/dsh-workspace/DNS-RP"
+    root = "/mnt/c/work/dsh-workspace/dnsrp"
     size = 256
 
     icon = draw(size)

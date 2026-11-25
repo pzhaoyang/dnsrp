@@ -8,7 +8,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 if [ -x "${HERE}/start.sh" ]; then
     bash "${HERE}/start.sh" stop
 else
-    echo "[DNS-RP] 未找到 start.sh，跳过停止"
+    echo "[dnsrp] 未找到 start.sh，跳过停止"
 fi
 
 exit 0

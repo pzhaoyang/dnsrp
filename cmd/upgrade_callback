@@ -10,7 +10,7 @@ set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "${HERE}/common.sh" 2>/dev/null || {
-    echo "[DNS-RP] 无法加载 common.sh"
+    echo "[dnsrp] 无法加载 common.sh"
 }
 
 dnrp_log "========== upgrade_callback =========="

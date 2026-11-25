@@ -183,7 +183,7 @@ def login() -> str:
         inner = {
             "reqid": rid(), "req": "user.login",
             "user": USER, "password": PASS,
-            "deviceName": "DNS-RP-Tool", "deviceType": "Browser",
+            "deviceName": "dnsrp-Tool", "deviceType": "Browser",
             "stay": True,
             "did": "d" + "".join(random.choice("0123456789abcdef")
                                  for _ in range(20)),
