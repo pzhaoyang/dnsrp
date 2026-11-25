@@ -750,7 +750,7 @@ async function loadProxy() {
             <td class="mono">${esc(r.target_scheme)}://${esc(r.target_host)}:${esc(r.target_port)}</td>
             <td><button class="mini ${r.enabled ? 'ok-btn' : 'off-btn'}"
               onclick="toggleRule(${esc(r.id)}, ${r.enabled ? 'false' : 'true'}, '${esc(r.name)}')"
-              title="点击${r.enabled ? '禁用' : '启用'}此规则">${r.enabled ? '● 启用' : '○ 停用'}</button></td>
+              title="点击${r.enabled ? '禁用' : '启用'}此规则">${r.enabled ? '启用' : '停用'}</button></td>
             <td>
               <button class="mini" onclick="openRule(${esc(r.id)})">编辑</button>
               <button class="mini danger" onclick="delRule(${esc(r.id)}, '${esc(r.name)}')">删除</button>
