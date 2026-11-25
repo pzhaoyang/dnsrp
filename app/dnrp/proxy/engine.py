@@ -437,6 +437,10 @@ class ProxyEngine:
                 out_lines.append("Connection: Upgrade")
                 out_lines.append(f"Upgrade: {headers.get('upgrade', 'websocket')}")
 
+            # ★ HTTP 请求头必须以空行结束（\r\n\r\n）。
+            #   join 列表末尾补一个空字符串只产生一个 \r\n，
+            #   必须补两个空串才是 \r\n\r\n，否则后端会一直等请求头结束。
+            out_lines.append("")
             out_lines.append("")
             backend_writer.write("\r\n".join(out_lines).encode("iso-8859-1"))
             await backend_writer.drain()
