@@ -1530,7 +1530,7 @@ function renderDDNS(rows) {
           <td><b>${esc(r.domain)}</b></td>
           <td><span class="tag">${esc(r.providerAlias || r.provider || '-')}</span></td>
           <td class="mono" style="font-size:12px">${esc(r.ipv4Addr || r.ipv4_addr || r.ipv4 || '-')}</td>
-          <td class="mono" style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis">${esc(r.ipv6Addr || r.ipv6_addr || r.ipv6 || '-')}</td>
+          <td class="mono" style="font-size:13px;word-break:break-all;min-width:220px">${esc(r.ipv6Addr || r.ipv6_addr || r.ipv6 || '-')}</td>
           <td><span class="tag ${cls}">${esc(st || '-')}</span></td>
           <td class="mono">${esc(r.updateInterval || r.update_interval || '-')} 分</td>
           <td style="white-space:nowrap">${capOk('ddns.write')
