@@ -391,28 +391,36 @@ class ProxyEngine:
 
         try:
             # ---- 构造转发请求头 ----
+            # ★ 用「黑名单」而不是白名单：只剔除逐跳头，其余原样转发。
+            #   之前的白名单会漏掉这些关键头：
+            #     transfer-encoding   → chunked 请求体无法被后端解析（P0-1）
+            #     sec-websocket-key   → WebSocket 握手 100% 失败（P0-2）
+            #     connection          → 带值的 Connection 被吞，后端不升级（P0-3）
             out_lines = [f"{method} {target} HTTP/1.1"]
+            forwarded = set()
             for k, v in headers.items():
-                if k in HOP_BY_HOP and not is_upgrade:
+                # 逐跳头一律由代理重新构造，不直接转发
+                if k in HOP_BY_HOP:
                     continue
                 if k == "host":
-                    if rule.preserve_host:
-                        out_lines.append(f"Host: {v}")
-                    else:
-                        out_lines.append(
-                            f"Host: {rule.target_host}:{rule.target_port}"
-                        )
-                    continue
-                if k not in FORWARD_HEADERS and k != "upgrade":
-                    continue
-                out_lines.append(f"{k.title()}: {v}")
+                    host_val = (v if rule.preserve_host
+                                else f"{rule.target_host}:{rule.target_port}")
+                    out_lines.append(f"Host: {host_val}")
+                else:
+                    out_lines.append(f"{k.title()}: {v}")
+                forwarded.add(k)
 
-            # WebSocket 需要保留 Connection/Upgrade
+            # ★ chunked 请求体：必须显式带上 Transfer-Encoding 头，
+            #   否则后端收到 chunk 字节流却以为没有 body。
+            if headers.get("transfer-encoding", "").lower() == "chunked":
+                out_lines.append("Transfer-Encoding: chunked")
+
+            # ★ WebSocket 升级：显式构造 Connection + Upgrade，
+            #   不管客户端原来怎么写的（可能是 keep-alive, Upgrade）。
             if is_upgrade:
-                if "connection" not in headers:
-                    out_lines.append("Connection: Upgrade")
+                out_lines.append("Connection: Upgrade")
+                out_lines.append(f"Upgrade: {headers.get('upgrade', 'websocket')}")
 
-            out_lines.append("")
             out_lines.append("")
             backend_writer.write("\r\n".join(out_lines).encode("iso-8859-1"))
             await backend_writer.drain()

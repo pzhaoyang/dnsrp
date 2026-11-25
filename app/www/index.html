@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="dnrp-auth" content="%%AUTH_TOKEN%%">
 <title>反向代理控制台</title>
 <style>
 :root{
@@ -628,7 +629,7 @@ function toast(msg, kind) {
 
   // 错误/警告类：走自绘对话框
   const title = kind === 'err' ? '操作失败' : '提示';
-  const plain = String(msg || '').replace(/\n/g, '<br>');
+  const plain = esc(msg || '').replace(/\n/g, '<br>');
   showDialog(title, `<div style="line-height:1.7">${plain}</div>`,
              [{ text: '知道了', pri: true }]);
 }
@@ -640,12 +641,26 @@ function esc(s) {
   ));
 }
 
+// 用于 onclick="fn('...')" 里的字符串参数：
+// 先转义 JS 字符串特殊字符（反斜杠/单引号/换行），再走 HTML 属性转义。
+// 顺序很重要：浏览器先解码 HTML 实体，再交给 JS 解析。
+function jesc(s) {
+  const js = String(s === null || s === undefined ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n');
+  return esc(js);
+}
+
 async function api(path, opts) {
   opts = opts || {};
+  const authEl = document.querySelector('meta[name="dnrp-auth"]');
   const res = await fetch('api/' + path, {
     method: opts.method || 'GET',
     headers: {
       'Content-Type': 'application/json',
+      'X-Dnrp-Auth': authEl ? authEl.content : '',
       ...credHeaders(),
     },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
@@ -752,11 +767,11 @@ async function loadProxy() {
             </td>
             <td class="mono">${esc(r.target_scheme)}://${esc(r.target_host)}:${esc(r.target_port)}</td>
             <td style="white-space:nowrap"><button class="mini ${r.enabled ? 'ok-btn' : 'off-btn'}"
-              onclick="toggleRule(${esc(r.id)}, ${r.enabled ? 'false' : 'true'}, '${esc(r.name)}')"
+              onclick="toggleRule(${esc(r.id)}, ${r.enabled ? 'false' : 'true'}, '${jesc(r.name)}')"
               title="点击${r.enabled ? '禁用' : '启用'}此规则">${r.enabled ? '启用' : '停用'}</button></td>
             <td style="white-space:nowrap">
               <button class="mini" onclick="openRule(${esc(r.id)})">编辑</button>
-              <button class="mini danger" onclick="delRule(${esc(r.id)}, '${esc(r.name)}')">删除</button>
+              <button class="mini danger" onclick="delRule(${esc(r.id)}, '${jesc(r.name)}')">删除</button>
             </td>
           </tr>`).join('')}
         </tbody>
@@ -1310,12 +1325,12 @@ function renderCerts(rows) {
       // 两个按钮始终显示，不可用时 disabled 灰掉（位置固定不再变化）
       const renewBtn = `<button class="mini" `
         + (canRenew
-            ? `onclick="renewCert(${c.certId}, '${esc(c.primaryDomain || c.host)}', '${renewBy}')"`
+            ? `onclick="renewCert(${c.certId}, '${jesc(c.primaryDomain || c.host)}', '${renewBy}')"`
             : `disabled title="${esc(renewWhy)}"`)
         + `>续期</button>`;
       const deleteBtn = `<button class="mini danger" `
         + (canDelete
-            ? `onclick="delCert(${c.certId}, '${esc(c.primaryDomain || c.host)}')"`
+            ? `onclick="delCert(${c.certId}, '${jesc(c.primaryDomain || c.host)}')"`
             : `disabled title="${esc(deleteWhy)}"`)
         + `>删除</button>`;
 
@@ -1561,8 +1576,8 @@ function renderDDNS(rows) {
           <td><span class="tag ${cls}">${esc(st || '-')}</span></td>
           <td class="mono">${esc(r.updateInterval || r.update_interval || '-')} 分</td>
           <td style="white-space:nowrap">${capOk('ddns.write')
-            ? `<button class="mini" onclick="editDDNS('${esc(r.domain)}', ${esc(r.updateInterval || r.update_interval || 5)})">编辑</button>
-               <button class="mini danger" onclick="delDDNS('${esc(r.domain)}')">删除</button>`
+            ? `<button class="mini" onclick="editDDNS('${jesc(r.domain)}', ${esc(r.updateInterval || r.update_interval || 5)})">编辑</button>
+               <button class="mini danger" onclick="delDDNS('${jesc(r.domain)}')">删除</button>`
             : '<span style="color:var(--tx2);font-size:12px">只读</span>'}</td>
         </tr>`;
       }).join('')}

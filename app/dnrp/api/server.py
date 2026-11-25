@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import re
+import secrets
 from typing import Any, Awaitable, Callable
 
 from .. import auth, capabilities, config, store
@@ -1452,6 +1453,11 @@ async def serve_http(port: int, www_dir, proxy: engine_mod.ProxyEngine) -> None:
     app = ApiApp(proxy)
     www = Path(www_dir)
 
+    # ★ 会话 token：每次启动随机生成，注入到首页。
+    #   局域网设备拿不到首页就无法调用 API；跨站页面无法设置自定义头。
+    auth_token = secrets.token_urlsafe(32)
+    app.auth_token = auth_token          # type: ignore[attr-defined]
+
     log.info("UI 目录: %s", www)
 
     async def handle(reader: asyncio.StreamReader,
@@ -1464,8 +1470,17 @@ async def serve_http(port: int, www_dir, proxy: engine_mod.ProxyEngine) -> None:
 
             method, path, query, headers, body = parsed     # type: ignore[misc]
 
-            # ---- API ----
+            # ---- API（需要会话 token）----
             if path.startswith("/api/"):
+                # /api/health 例外，便于外部探活（不泄露敏感信息）
+                if path != "/api/health":
+                    supplied = headers.get("x-dnrp-auth", "")
+                    if not supplied or not secrets.compare_digest(
+                            supplied, app.auth_token):
+                        writer.write(_build_raw_response(
+                            401, "text/plain; charset=utf-8", b"Unauthorized", method))
+                        await writer.drain()
+                        return
                 req = Request(method, path, query, body, headers)
                 resp = await app.handle(req)
                 writer.write(_build_response(resp, method))
@@ -1474,6 +1489,10 @@ async def serve_http(port: int, www_dir, proxy: engine_mod.ProxyEngine) -> None:
 
             # ---- 静态文件 ----
             status, ctype, content = _serve_static(www, path)
+            # 首页注入会话 token（替换占位符）
+            if status == 200 and path in ("/", "/index.html") and content:
+                tok = app.auth_token.encode()
+                content = content.replace(b"%%AUTH_TOKEN%%", tok)
             writer.write(_build_raw_response(status, ctype, content, method))
             await writer.drain()
 
