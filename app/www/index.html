@@ -736,7 +736,7 @@ async function loadProxy() {
     box.innerHTML = `
       <table>
         <thead><tr>
-          <th>名称</th><th>域名</th><th>监听</th><th>后端</th><th>状态</th><th style="width:250px;white-space:nowrap">操作</th>
+          <th>名称</th><th>域名</th><th>监听</th><th>后端</th><th>状态</th><th style="width:220px">操作</th>
         </tr></thead>
         <tbody>
         ${rows.map((r) => `
@@ -1274,7 +1274,8 @@ function renderCerts(rows) {
       const inUse = isCertReallyUsed(c);
       const renewBy = c.renewBy || '';
       const isSystem = !!c.isSystemCert;
-      // ★ 权限按证书来源区分（实测 fnOS 行为）：
+
+      // 权限按证书来源区分（实测 fnOS 行为）：
       //   acme      = 用户申请的多域名证书 -> 可续期、未被占用时可删除
       //   system    = fnOS 自签兜底证书   -> 可续期(sysreset)、不可删除
       //   fnconnect = FN Connect 专属证书 -> 不可续期、不可删除
@@ -1282,42 +1283,50 @@ function renderCerts(rows) {
         && (renewBy === 'acme' || renewBy === 'system');
       const canDelete = c.certId != null && !isSystem && !inUse;
 
-      // ★ 续期/删除位置固定：第 1 格永远续期、第 2 格永远删除。
-      //   64px 格宽要容得下 14px 按钮 + 6px 16px padding（约 62px），
-      //   否则按钮会溢出把「使用中」挤到下一行。
-      const renewCell = canRenew
+      // 提示文字（按钮下方一行，小号灰字）
+      let hint = '';
+      let hintTip = '';
+      if (renewBy === 'fnconnect') {
+        hint = '系统管理 · FN Connect';
+        hintTip = 'FN Connect 专属证书，由飞牛 OS 自动管理，不能续期或删除';
+      } else if (renewBy === 'system') {
+        hint = '系统证书 · 不可删除';
+        hintTip = 'fnOS 自签兜底证书，可重新生成，但不能删除';
+      } else if (inUse) {
+        hint = '使用中';
+        hintTip = '该域名仍在反向代理中使用，需先删除规则才能删除证书';
+      }
+
+      // 两行布局：
+      //   第 1 行：续期 / 删除两个固定位置的按钮（缺哪个就留空，位置不变）
+      //   第 2 行：状态提示（有才显示）
+      const renewBtn = canRenew
         ? `<button class="mini" onclick="renewCert(${c.certId}, `
           + `'${esc(c.primaryDomain || c.host)}', '${renewBy}')">续期</button>`
         : '';
-      const deleteCell = canDelete
+      const deleteBtn = canDelete
         ? `<button class="mini danger" onclick="delCert(${c.certId}, `
           + `'${esc(c.primaryDomain || c.host)}')">删除</button>`
         : '';
 
       let opCell;
       if (c.certId == null) {
-        opCell = '<span style="color:var(--tx2);font-size:14px">—</span>';
-      } else if (!canRenew && !canDelete) {
-        // 系统证书（FN Connect）没有任何可用操作
-        const tip = renewBy === 'fnconnect'
-          ? 'FN Connect 专属证书，由飞牛 OS 自动管理，不能续期或删除'
-          : '系统证书，由飞牛 OS 管理';
-        opCell = '<span style="color:var(--tx2);font-size:14px" '
-          + `title="${tip}">系统管理</span>`;
+        opCell = '<span style="color:var(--tx2)">—</span>';
       } else {
-        // flex 居中 + nowrap，让「使用中」与按钮里的字同一基线、同行显示
-        let cell = '<span style="display:inline-flex;align-items:center;gap:4px;'
-          + 'white-space:nowrap">'
-          + '<span style="display:inline-block;width:64px">' + renewCell + '</span>'
-          + '<span style="display:inline-block;width:64px">' + deleteCell + '</span>';
-        if (renewBy === 'system') {
-          cell += '<span style="color:var(--tx2);font-size:14px;margin-left:2px" '
-            + 'title="fnOS 自签兜底证书，可重新生成但不能删除">'
-            + '系统证书</span>';
-        } else if (inUse) {
-          cell += '<span style="color:var(--tx2);font-size:14px;margin-left:2px" '
-            + 'title="该域名仍在反向代理中使用，需先删除规则才能删除证书">'
-            + '使用中</span>';
+        const hasBtn = canRenew || canDelete;
+        let cell = '<span style="display:inline-block;vertical-align:middle">';
+        if (hasBtn) {
+          cell += '<span style="display:flex;gap:6px;align-items:center">'
+            + '<span style="display:inline-flex;justify-content:center;width:58px">'
+            + renewBtn + '</span>'
+            + '<span style="display:inline-flex;justify-content:center;width:58px">'
+            + deleteBtn + '</span></span>';
+        }
+        if (hint) {
+          cell += '<span style="display:block;margin-top:6px;color:var(--tx2);'
+            + 'font-size:12px;white-space:nowrap"'
+            + (hintTip ? ` title="${esc(hintTip)}"` : '')
+            + '>' + esc(hint) + '</span>';
         }
         opCell = cell + '</span>';
       }
