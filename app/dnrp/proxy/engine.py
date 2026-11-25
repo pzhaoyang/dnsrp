@@ -464,11 +464,29 @@ class ProxyEngine:
                 await self._send_error(client_writer, 504, "Gateway Timeout")
                 return
 
+            # ---- 过滤响应逐跳头，强制 Connection: close ----
+            #   代理读完响应就关连接，若把后端的 keep-alive 原样回给
+            #   浏览器，客户端会复用已关闭连接 → 偶发 ConnectionReset。
+            resp_text = resp_head.decode("iso-8859-1", "ignore")
+            resp_lines = resp_text.split("\r\n")
+            kept = [resp_lines[0]]
+            for line in resp_lines[1:]:
+                if not line:
+                    continue
+                k, _, _v = line.partition(":")
+                kl = k.strip().lower()
+                # ★ transfer-encoding 必须保留：客户端要靠它解析 body。
+                #   只过滤 connection 类真正的逐跳头。
+                if kl in HOP_BY_HOP and kl != "transfer-encoding":
+                    continue
+                kept.append(line)
+            kept.append("Connection: close")
+            resp_head = ("\r\n".join(kept) + "\r\n\r\n").encode("iso-8859-1")
+
             client_writer.write(resp_head)
             await client_writer.drain()
 
             # ---- 判断响应体长度 ----
-            resp_text = resp_head.decode("iso-8859-1", "ignore")
             resp_clen = None
             resp_chunked = False
             for line in resp_text.split("\r\n")[1:]:
@@ -491,9 +509,12 @@ class ProxyEngine:
             if resp_clen is not None:
                 await self._pipe(client_writer, resp_clen, backend_reader)
             elif resp_chunked:
-                await self._relay_all(backend_reader, client_writer)
+                # ★ chunked 响应必须按协议转发到终止块，不能读到 EOF：
+                #   keep-alive 后端发完不会关连接，等 EOF 会一直挂到超时。
+                await self._pipe_chunked(backend_reader, client_writer,
+                                         backend_reader)
             else:
-                # 无长度信息且非 chunked：读到 EOF
+                # 无长度信息且非 chunked：读到 EOF（或空闲超时正常收尾）
                 await self._relay_all(backend_reader, client_writer)
 
             await client_writer.drain()
@@ -551,14 +572,31 @@ class ProxyEngine:
     async def _relay_all(
         self, src: asyncio.StreamReader, dst: asyncio.StreamWriter
     ) -> None:
-        """读到 EOF 为止全量转发。"""
-        while True:
-            chunk = await asyncio.wait_for(
-                src.read(65536), timeout=IO_IDLE_TIMEOUT)
-            if not chunk:
-                break
-            dst.write(chunk)
-            await dst.drain()
+        """读到 EOF（或空闲超时）为止全量转发。
+
+        ★ 关键：空闲超时必须当作**正常结束**，不能抛异常。
+          keep-alive 后端发完响应后不会主动关连接，如果这里把
+          wait_for 的 TimeoutError 抛给上层，_handle 会当成错误
+          并返回 502/504 —— 浏览器看到的就是「一直转悠然后
+          Gateway Timeout」。curl 因为带 Connection: close 不复现。
+
+          正确行为：等到空闲超时说明后端已经发完了，把已收数据
+          回传完、正常收尾即可。
+        """
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(
+                        src.read(65536), timeout=IO_IDLE_TIMEOUT)
+                except asyncio.TimeoutError:
+                    log.debug("后端响应空闲超时，按正常结束处理")
+                    break
+                if not chunk:
+                    break
+                dst.write(chunk)
+                await dst.drain()
+        except (ConnectionResetError, BrokenPipeError):
+            pass
 
     async def _tunnel(
         self,
