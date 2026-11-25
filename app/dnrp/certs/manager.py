@@ -377,31 +377,31 @@ def _restore_desc(
 
 def renew_cert(api: FnosClient, cert_id: Any,
                wait: bool = True, timeout: float = 180) -> dict[str, Any]:
-    """手动触发一张证书的续期（走 fnOS 的 ACME 引擎）。
+    """手动触发一张证书的续期。
 
-    ★ 与自动续签的关系：
-      fnOS 自己会在证书快到期时自动续（前提是 renewal=1）。
-      本函数是**手动立即续期**，用于：
-        * 用户想马上换一张新证书
-        * 自动续签失败后手动重试
-        * 调整了 SAN / 换算法后立即生效
+    ★ 续期方式按证书类型不同（2026-11-25 实测）：
 
-    ★ 参数：`appcgi.netsvr.cert.renew` 只要 id。
-      返回 processId（可能是数字或字符串），需要轮询 applystatus。
+      * 用户申请的多域名证书（source=upload, renewal=1）：
+          走 cert.renew(id)，重新走一次 ACME DNS-01。
+      * fnOS 自签兜底证书（source=system，如 id=1 fnOS）：
+          cert.renew 报 errno=3000035 Cert Not Renewable。
+          要改用 **cert.sysreset**（无参数）—— 这正是 fnOS 设置页
+          「更新系统证书」用的接口，会重新生成自签证书。
+          实测：调用后 valid_from / last_renew_time 都更新了。
+      * FN Connect 专属证书（source=trim）：
+          两种接口都不行，由 FN Connect 服务自动管理，无法手动续。
+          前端不应给它续期按钮。
 
-    ⚠️ 限制（实测）：
-      * renewal=0 的证书不能续（fnOS 侧没有续签配置）——
-        本函数会先检查，不满足就明确报错。
-      * 续期会重新走一次 DNS-01，需要对应 DDNS 记录的凭据有效。
-      * 证书主域名必须与 cert_renew.ddns_related_id 指向的 DDNS 记录
-        域名一致，否则报 Cert Apply Domain Not Match。
+      ⚠️ 对 ACME 证书：续期需要对应 DDNS 记录的凭据有效，
+         且证书主域名必须与 cert_renew.ddns_related_id 指向的记录一致，
+         否则报 Cert Apply Domain Not Match。
 
     返回 {id, domain, status, note}。
     """
     if cert_id is None:
         raise ValueError("续期需要证书 id")
 
-    # 1. 前置检查：证书存在且具备续签资格
+    # 1. 前置检查：证书存在
     rows = list_certs(api)
     target = None
     for r in rows:
@@ -412,33 +412,51 @@ def renew_cert(api: FnosClient, cert_id: Any,
     if target is None:
         raise CertError(f"证书不存在: id={cert_id}")
 
-    if int(target.get("renewal") or 0) != 1:
+    source = str(target.get("source") or "")
+    is_system = source == "system"
+
+    # FN Connect 证书无法手动续期
+    if source == "trim":
+        raise CertError(
+            f"「{target.get('domain')}」是 FN Connect 专属证书，"
+            f"由 FN Connect 服务自动管理，无法在本应用手动续期。\n\n"
+            f"如需更新，请在飞牛 OS「远程访问 / FN Connect」中操作。"
+        )
+
+    # 非系统证书必须有 renewal=1
+    if not is_system and int(target.get("renewal") or 0) != 1:
         raise CertError(
             f"「{target.get('domain')}」这张证书没有续签资格（renewal=0）。\n\n"
-            f"可能原因：\n"
-            f"  · 这不是通过本应用签发的证书（fnOS 系统证书不需要续签）\n"
-            f"  · 证书是导入的，缺少 cert_renew 配置\n\n"
             f"解决方式：用「申请证书」重新签一张，或到飞牛 OS 证书管理里操作。"
         )
 
     # 2. 触发续期
-    try:
-        proc_id = api.call("appcgi.netsvr.cert.renew",
-                           {"id": int(cert_id)}, timeout=60)
-    except FnosWsError as exc:
-        msg = str(exc)
-        if "3000033" in msg:
-            raise CertError(
-                f"{exc}\n\n"
-                f"提示：这是「证书域名与 DDNS 记录不匹配」导致的。\n"
-                f"fnOS 要求证书主域名与 cert_renew 绑定的 DDNS 记录域名完全一致。\n"
-                f"请确认 {target.get('domain')} 在 DDNS 列表里有同名记录。"
-            ) from exc
-        if "3000025" in msg:
-            raise CertError(
-                f"{exc}\n\n提示：该证书正在被使用中，暂时不能续期。"
-            ) from exc
-        raise CertError(f"触发续期失败: {exc}") from exc
+    if is_system:
+        # ★ 系统自签证书用 sysreset（无参数），不是 cert.renew
+        proc_id = None
+        try:
+            api.call("appcgi.netsvr.cert.sysreset", {}, timeout=60)
+        except FnosWsError as exc:
+            raise CertError(f"更新系统证书失败: {exc}") from exc
+    else:
+        try:
+            proc_id = api.call("appcgi.netsvr.cert.renew",
+                               {"id": int(cert_id)}, timeout=60)
+        except FnosWsError as exc:
+            msg = str(exc)
+            if "3000033" in msg:
+                raise CertError(
+                    f"{exc}\n\n"
+                    f"提示：这是「证书域名与 DDNS 记录不匹配」导致的。\n"
+                    f"fnOS 要求证书主域名与 cert_renew 绑定的 DDNS 记录域名完全一致。\n"
+                    f"请确认 {target.get('domain')} 在 DDNS 列表里有同名记录。"
+                ) from exc
+            if "3000025" in msg:
+                raise CertError(
+                    f"{exc}\n\n提示：该证书正在被使用中，暂时不能续期。"
+                ) from exc
+            raise CertError(f"触发续期失败: {exc}") from exc
+
 
     # 3. 轮询结果
     status = ""
@@ -456,7 +474,9 @@ def renew_cert(api: FnosClient, cert_id: Any,
                 after = r
                 break
         if after:
-            if int(after.get("renewal") or 0) != 1:
+            # ★ 系统自签证书 renewal 本来就是 0（不写 cert_renew 表），
+            #   不要去「修正」它，否则会画蛇添足。
+            if not is_system and int(after.get("renewal") or 0) != 1:
                 log.warning("续期后 %s 的 renewal 变成 0，尝试修正",
                             target.get("domain"))
                 _fix_renewal_flag(api, cert_id, after, timeout)

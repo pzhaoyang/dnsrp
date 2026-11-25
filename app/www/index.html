@@ -1264,34 +1264,40 @@ function renderCerts(rows) {
       //   在用的证书**可以续期**（换一张新的、有效期重置），
       //   只是不能删除。所以两个按钮分别判断。
       const inUse = isCertReallyUsed(c);
-      const canRenew = !c.isFallback && c.certId != null && c.renewal;
+      const autoRenew = !!c.autoRenew;
+      // ★ 只要有自动续签标识，就给「续期」按钮。
+      //   · acme / system 可以真正续期（走 cert.renew / cert.sysreset）
+      //   · fnconnect 会由后端明确报错提示「由 FN Connect 管理」
+      const canRenew = !c.isFallback && c.certId != null && autoRenew;
       const canDelete = !c.isFallback && c.certId != null && !inUse;
 
-      const btns = [];
-      if (canRenew) {
-        btns.push(`<button class="mini" onclick="renewCert(${c.certId}, `
-          + `'${esc(c.primaryDomain || c.host)}')">续期</button>`);
-      }
-      if (canDelete) {
-        btns.push(`<button class="mini danger" onclick="delCert(${c.certId}, `
-          + `'${esc(c.primaryDomain || c.host)}')">删除</button>`);
-      }
+      // ★ 续期和删除固定位置：
+      //   第 1 格永远是续期（可点/占位），第 2 格永远是删除（可点/占位）。
+      //   这样没有续期按钮时，删除不会跑到左边去。
+      const renewCell = canRenew
+        ? `<button class="mini" onclick="renewCert(${c.certId}, `
+          + `'${esc(c.primaryDomain || c.host)}')">续期</button>`
+        : '<span style="display:inline-block;width:52px"></span>';
+      const deleteCell = canDelete
+        ? `<button class="mini danger" onclick="delCert(${c.certId}, `
+          + `'${esc(c.primaryDomain || c.host)}')">删除</button>`
+        : '<span style="display:inline-block;width:52px"></span>';
 
       let opCell;
       if (c.isFallback) {
         opCell = '<span style="color:var(--tx2);font-size:14px" '
-          + 'title="兜底证书是系统的安全网，不能删除也不能续期">兜底保护</span>';
+          + 'title="兜底证书是系统的安全网，不能删除">兜底保护</span>';
       } else if (c.certId == null) {
         opCell = '<span style="color:var(--tx2);font-size:14px">—</span>';
-      } else if (!btns.length) {
-        opCell = '<span style="color:var(--tx2);font-size:14px" '
-          + 'title="该域名仍在反向代理中使用，不能删除；也没有续签资格">使用中</span>';
       } else {
-        // 「使用中」与按钮里的字同为 14px，用 align-items:center 让两者基线对齐
-        let cell = '<span style="display:inline-flex;align-items:center;gap:6px">'
-          + btns.join('');
+        // 单元格用 flex 布局：两个固定宽度的按钮位 + 末尾的「使用中」。
+        // 「使用中」与按钮里的字同为 14px，靠 align-items:center 让文字基线对齐。
+        let cell = '<span style="display:inline-flex;align-items:center;gap:4px;'
+          + 'white-space:nowrap">'
+          + '<span style="display:inline-block;width:52px">' + renewCell + '</span>'
+          + '<span style="display:inline-block;width:52px">' + deleteCell + '</span>';
         if (inUse) {
-          cell += '<span style="color:var(--tx2);font-size:14px" '
+          cell += '<span style="color:var(--tx2);font-size:14px;margin-left:2px" '
             + 'title="该域名仍在反向代理中使用，需先删除规则才能删除证书">'
             + '使用中</span>';
         }
