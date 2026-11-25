@@ -355,11 +355,32 @@ class ApiApp:
             "proxy": self.proxy.status(),
         })
 
-    async def h_overview(self, _req: Request) -> Response:
+    async def h_overview(self, req: Request) -> Response:
         try:
             rules = store.list_proxy_rules()
-            ddns = store.list_ddns()
             cert_list = store.list_certs()
+
+            # ★ DDNS 记录数必须取 fnOS 里的真实记录，不是本地 SQLite 的 ddns_link。
+            #
+            #   store.list_ddns() 读的是本地表，只有通过本应用「添加」过的
+            #   才会写进去；用户原本在 fnOS 里就有的记录它完全不知道，
+            #   所以概览一直显示 0。
+            #
+            #   改成用 api_client.list_records() 拿 fnOS 的全部记录。
+            #   拿不到（比如没配账号）就退回本地计数，不让整个概览挂掉。
+            ddns_count = 0
+            ddns_source = "local"
+            try:
+                cli = _fn_client()
+                try:
+                    from ..ddns import api_client
+                    ddns_count = len(api_client.list_records(cli))
+                    ddns_source = "fnos"
+                finally:
+                    cli.close()
+            except Exception as exc:           # noqa: BLE001
+                log.info("读取 fnOS DDNS 记录失败，退回本地计数: %s", exc)
+                ddns_count = len(store.list_ddns())
             # ★ 按「证书实体」统计，不是按域名映射条数。
             #
             #   load_registry() 返回的是 network_gateway_cert.conf 的
@@ -377,7 +398,8 @@ class ApiApp:
 
         return Response.ok({
             "proxyRules": len(rules),
-            "ddnsRecords": len(ddns),
+            "ddnsRecords": ddns_count,
+            "ddnsSource": ddns_source,
             "localCerts": len(cert_list),
             # 用户自己的证书张数（去重、排除系统证书）
             "fnosCerts": len(user_certs),

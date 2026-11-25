@@ -52,8 +52,9 @@ button{
 button:hover{border-color:var(--pri);color:var(--pri)}
 button.pri{background:var(--pri);border-color:var(--pri);color:#fff}
 button.pri:hover{background:var(--pri-h);border-color:var(--pri-h);color:#fff}
-button.danger{color:var(--err);border-color:#ffd2d2}
-button.danger:hover{background:var(--err);border-color:var(--err);color:#fff}
+button.danger{background:var(--err);border-color:var(--err);color:#fff}
+button.danger:hover{filter:brightness(.92)}
+button.danger:active{filter:brightness(.85)}
 button.sm{padding:3px 10px;font-size:12px}
 button:disabled{opacity:.5;cursor:not-allowed}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -1260,7 +1261,13 @@ function renderCerts(rows) {
         <td><b>${esc(c.primaryDomain || c.host)}</b></td>
         <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(c.issuer)}</td>
         <td><span class="tag">${esc(c.keyType || '-')}</span></td>
-        <td class="mono">${esc(new Date(c.notAfter * 1000).toLocaleDateString())}</td>
+        <td class="mono">${esc(new Date(c.notAfter * 1000).toLocaleDateString())}${
+          c.renewal
+            ? '<div style="margin-top:3px"><span class="tag ok" '
+              + 'title="到期前飞牛 OS 会自动向 Let\'s Encrypt 续期">'
+              + '自动续签</span></div>'
+            : ''
+        }</td>
         <td>${domCell}</td>
         <td><span class="tag ${cls}">${dtxt}</span></td>
         <td>${opCell}</td>
@@ -1313,22 +1320,8 @@ async function editDDNS(domain, interval) {
         ${esc(domain)}
         <span class="tag" style="margin-left:8px">${esc(cur.provider || '-')}</span>
       </div>
-      <div style="padding:10px;background:var(--bg2);border-left:3px solid var(--warn);
-                  border-radius:4px;font-size:12px;line-height:1.7;margin-bottom:14px">
-        凭据已从飞牛 OS 读出（明文显示）。<b>只改间隔时不要改动它们</b>，
-        保存时会把原值一并回填，不会丢。<br>
-        如需更换 Token，直接改下面的值即可。
-      </div>`,
+`,
     fields: [
-      {
-        id: 'ed-interval',
-        label: '检查间隔（分钟）',
-        type: 'number',
-        value: String(cur.updateInterval || interval || 5),
-        min: 1,
-        max: 1440,
-        tip: '飞牛 OS 按此间隔检测公网 IP 变化并上报',
-      },
       {
         id: 'ed-ak',
         label: 'Access Key / ID',
@@ -1344,6 +1337,15 @@ async function editDDNS(domain, interval) {
         value: cur.accessSecret || '',
         placeholder: '通常无需修改',
         tip: '留空则保持原值；Cloudflare API Token 方式可留空',
+      },
+      {
+        id: 'ed-interval',
+        label: '检查间隔（分钟）',
+        type: 'number',
+        value: String(cur.updateInterval || interval || 5),
+        min: 1,
+        max: 1440,
+        tip: '飞牛 OS 按此间隔检测公网 IP 变化并上报',
       },
     ],
     okText: '保存',
