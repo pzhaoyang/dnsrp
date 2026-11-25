@@ -98,11 +98,13 @@ class Credentials:
         return s.encode()
 
     def masked(self) -> dict[str, Any]:
-        """脱敏后的描述，用于日志/调试接口。"""
+        """脱敏后的描述，用于日志/调试接口。
+
+        ★ 只报「有无 + 长度」，不泄露任何前缀/后缀片段：
+          对 base64 编码的短密钥，前 4 后 4 已相当于泄露部分密钥材料。
+        """
         def m(v: str) -> str:
-            if not v:
-                return ""
-            return f"{v[:4]}…{v[-4:]}(len={len(v)})" if len(v) > 10 else f"(len={len(v)})"
+            return f"(len={len(v)})" if v else ""
 
         return {
             "source": self.source,

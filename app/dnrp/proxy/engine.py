@@ -57,6 +57,11 @@ FORWARD_HEADERS = {
 
 MAX_HEADER = 64 * 1024
 
+# 单块读空闲超时（秒）。大文件传输只要持续有数据就不会触发。
+IO_IDLE_TIMEOUT = 120
+# WebSocket 隧道空闲超时（秒）。长连接无数据时才断开，避免僵尸 task。
+TUNNEL_IDLE_TIMEOUT = 600
+
 
 @dataclass
 class Rule:
@@ -283,7 +288,7 @@ class ProxyEngine:
 
             # HTTP → HTTPS 跳转（仅当该端口的规则要求）
             if rule.force_https and not lis.tls:
-                location = self._https_location(rule, host)
+                location = self._https_location(rule, host, target)
                 if location:
                     await self._send_redirect(writer, 301, location)
                     return
@@ -340,14 +345,25 @@ class ProxyEngine:
 
         return method, target, version, headers
 
-    def _https_location(self, rule: Rule, host: str | None) -> str | None:
+    def _https_location(self, rule: Rule, host: str | None,
+                        target: str = "/") -> str | None:
         """构造 HTTPS 跳转地址。
 
         目标端口：如果该域名还有一条 TLS 规则，用它；否则跳过。
+        ★ 保留原始路径与查询串（之前硬编码 "/" 会把用户访问的路径丢掉）。
         """
         if not host:
             return None
         host_no_port = host.split(":")[0]
+        # target 可能是绝对路径或完整 URL，只取 path+query
+        if "://" in target:
+            from urllib.parse import urlsplit
+            u = urlsplit(target)
+            path_q = u.path or "/"
+            if u.query:
+                path_q += "?" + u.query
+        else:
+            path_q = target if target.startswith("/") else "/" + target
 
         # 在同端口集合里找该域名的 TLS 规则
         for lis in self._listeners.values():
@@ -355,7 +371,7 @@ class ProxyEngine:
                 continue
             if self._match(lis, host_no_port) is not None:
                 port_part = "" if lis.port == 443 else f":{lis.port}"
-                return f"https://{host_no_port}{port_part}/"
+                return f"https://{host_no_port}{port_part}{path_q}"
 
         return None
 
@@ -428,8 +444,7 @@ class ProxyEngine:
             # ---- 转发请求体 ----
             clen = headers.get("content-length")
             if clen and clen.isdigit() and int(clen) > 0:
-                await self._pipe(backend_reader, backend_writer,
-                                 int(clen), client_reader)
+                await self._pipe(backend_writer, int(clen), client_reader)
             elif headers.get("transfer-encoding", "").lower() == "chunked":
                 await self._pipe_chunked(backend_reader, backend_writer,
                                          client_reader)
@@ -470,8 +485,7 @@ class ProxyEngine:
 
             # ---- 回传响应体 ----
             if resp_clen is not None:
-                await self._pipe(client_writer, client_writer,
-                                 resp_clen, backend_reader)
+                await self._pipe(client_writer, resp_clen, backend_reader)
             elif resp_chunked:
                 await self._relay_all(backend_reader, client_writer)
             else:
@@ -487,15 +501,17 @@ class ProxyEngine:
 
     async def _pipe(
         self,
-        _dst_reader: asyncio.StreamReader,
         dst_writer: asyncio.StreamWriter,
         length: int,
         src_reader: asyncio.StreamReader,
     ) -> None:
-        """精确转发 length 字节。"""
+        """精确转发 length 字节（带空闲超时）。"""
         remaining = length
         while remaining > 0:
-            chunk = await src_reader.read(min(65536, remaining))
+            chunk = await asyncio.wait_for(
+                src_reader.read(min(65536, remaining)),
+                timeout=IO_IDLE_TIMEOUT,
+            )
             if not chunk:
                 break
             dst_writer.write(chunk)
@@ -510,7 +526,8 @@ class ProxyEngine:
     ) -> None:
         """转发 chunked 请求体（原样搬运分块）。"""
         while True:
-            line = await src_reader.readuntil(b"\r\n")
+            line = await asyncio.wait_for(
+                src_reader.readuntil(b"\r\n"), timeout=IO_IDLE_TIMEOUT)
             dst_writer.write(line)
             try:
                 size = int(line.strip().split(b";")[0], 16)
@@ -518,10 +535,12 @@ class ProxyEngine:
                 break
             if size == 0:
                 # 读 trailer
-                trailer = await src_reader.readuntil(b"\r\n")
+                trailer = await asyncio.wait_for(
+                    src_reader.readuntil(b"\r\n"), timeout=IO_IDLE_TIMEOUT)
                 dst_writer.write(trailer)
                 break
-            data = await src_reader.readexactly(size + 2)
+            data = await asyncio.wait_for(
+                src_reader.readexactly(size + 2), timeout=IO_IDLE_TIMEOUT)
             dst_writer.write(data)
             await dst_writer.drain()
 
@@ -530,7 +549,8 @@ class ProxyEngine:
     ) -> None:
         """读到 EOF 为止全量转发。"""
         while True:
-            chunk = await src.read(65536)
+            chunk = await asyncio.wait_for(
+                src.read(65536), timeout=IO_IDLE_TIMEOUT)
             if not chunk:
                 break
             dst.write(chunk)
@@ -548,19 +568,32 @@ class ProxyEngine:
         async def pump(src: asyncio.StreamReader, dst: asyncio.StreamWriter) -> None:
             try:
                 while True:
-                    data = await src.read(65536)
+                    data = await asyncio.wait_for(
+                        src.read(65536), timeout=TUNNEL_IDLE_TIMEOUT)
                     if not data:
                         break
                     dst.write(data)
                     await dst.drain()
-            except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError):
+            except (ConnectionResetError, BrokenPipeError,
+                    asyncio.CancelledError, asyncio.TimeoutError):
                 pass
 
-        await asyncio.gather(
-            pump(client_reader, backend_writer),
-            pump(backend_reader, client_writer),
-            return_exceptions=True,
-        )
+        # ★ 任一端关闭就取消另一端：避免后端先发 FIN 时另一个 pump
+        #   永久阻塞在 read()，导致隧道 task 永不回收。
+        tasks = [
+            asyncio.create_task(pump(client_reader, backend_writer)),
+            asyncio.create_task(pump(backend_reader, client_writer)),
+        ]
+        try:
+            _done, pending = await asyncio.wait(
+                tasks, return_when=asyncio.FIRST_COMPLETED)
+            for t in pending:
+                t.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+        finally:
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
 
     # ------------------------------------------------------------- 响应工具
 

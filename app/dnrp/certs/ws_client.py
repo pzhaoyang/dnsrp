@@ -22,7 +22,7 @@ import hmac
 import json
 import logging
 import os
-import random
+import secrets
 import shutil
 import socket
 import ssl
@@ -32,6 +32,8 @@ import tempfile
 import time
 from typing import Any
 from urllib.parse import urlparse
+
+from . import _aes
 
 log = logging.getLogger("dnrp.certs.ws")
 
@@ -48,7 +50,8 @@ class TwofaRequired(FnosWsError):
     """账号开启了双重验证，需要验证码。"""
 
     def __init__(self, resp: dict[str, Any]) -> None:
-        self.resp = resp
+        # ★ 只保留后续验证需要的 accessToken，不保存完整响应字典
+        #   （避免异常对象被日志化时泄露其它会话字段）
         self.access_token = str(resp.get("accessToken") or "")
         super().__init__("该 fnOS 账号开启了双重验证（2FA），需要 6 位验证码")
 
@@ -113,6 +116,30 @@ class WebSocket:
                     "  通常是访问码不正确"
                 )
             raise FnosWsError(f"WS 握手失败: {first_line}")
+
+        # ★ 校验 Sec-WebSocket-Accept（RFC 6455）。
+        #   宽松模式：服务端返回了该头就校验；没返回只记一条 debug，
+        #   不阻断——避免 fnOS 某些版本实现不标准导致登录直接失败。
+        try:
+            accept = ""
+            for line in resp.split(b"\r\n\r\n", 1)[0].split(b"\r\n"):
+                if b":" in line:
+                    k, _, v = line.partition(b":")
+                    if k.strip().lower() == b"sec-websocket-accept":
+                        accept = v.strip().decode(errors="replace")
+                        break
+            if accept:
+                expect = base64.b64encode(hashlib.sha1(
+                    (key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()
+                ).digest()).decode()
+                if not secrets.compare_digest(accept, expect):
+                    raise FnosWsError("WS 握手：Sec-WebSocket-Accept 校验失败")
+            else:
+                log.debug("WS 握手响应缺少 Sec-WebSocket-Accept，跳过校验")
+        except FnosWsError:
+            raise
+        except Exception as exc:                # noqa: BLE001
+            log.debug("Sec-WebSocket-Accept 检查异常: %s", exc)
 
         self.buf = resp.split(b"\r\n\r\n", 1)[1]
 
@@ -208,7 +235,7 @@ class FnosClient:
         self.cookie = cookie
 
         self._ws: WebSocket | None = None
-        self._counter = random.randint(0x1000, 0xEFFFFF)
+        self._counter = secrets.randbits(24) | 0x1000
         self.secret = b""
         self.did = ""
         self.device_name = "Linux-DNSRP"
@@ -242,7 +269,7 @@ class FnosClient:
             raise FnosWsError("缺少用户名或密码")
 
         self.did = "d" + "".join(
-            random.choice("0123456789abcdef") for _ in range(20)
+            secrets.choice("0123456789abcdef") for _ in range(20)
         )
         return self.login(self.username, self.password)
 
@@ -282,7 +309,7 @@ class FnosClient:
         if not self._preset_secret and self.username and self.password:
             # 没有预置密钥时，用密码登录补齐会话
             self.did = "d" + "".join(
-                random.choice("0123456789abcdef") for _ in range(20)
+                secrets.choice("0123456789abcdef") for _ in range(20)
             )
             self.login(self.username, self.password)
             return
@@ -296,7 +323,7 @@ class FnosClient:
         r = self._wait(obj["reqid"])
         si = str(r.get("si") or "")
         if not si:
-            raise FnosWsError(f"getSI 失败: {r}")
+            raise FnosWsError(f"getSI 失败: errno={r.get('errno')} {r.get('errmsg') or ''}")
 
         # 没有 secret 时无法签名，fnOS 允许明文 authToken？实测需要签名。
         # 所以 cookie 方式仍需要 secret —— 从登录接口拿不到了。
@@ -384,7 +411,7 @@ class FnosClient:
         pub = r0.get("pub") or ""
         si = str(r0.get("si") or "")
         if not pub:
-            raise FnosWsError(f"getRSAPub 失败: {r0}")
+            raise FnosWsError(f"getRSAPub 失败: errno={r0.get('errno')} {r0.get('errmsg') or ''}")
 
         work = tempfile.mkdtemp(prefix="dnrp-enc-")
         try:
@@ -415,18 +442,15 @@ class FnosClient:
             inner["si"] = si
             ij = json.dumps(inner, separators=(",", ":"), ensure_ascii=False)
 
-            enc = subprocess.run(
-                ["openssl", "enc", "-aes-256-cbc",
-                 "-K", aes_key.hex(), "-iv", iv.hex(),
-                 "-base64", "-A"],
-                input=ij.encode(), capture_output=True, check=True, timeout=20,
-            )
+            # ★ 用纯 Python AES，密钥不经命令行参数（避免 ps 泄露）
+            enc_cipher = _aes.cbc_encrypt(ij.encode(), aes_key, iv)
+            enc_b64 = base64.b64encode(enc_cipher).decode()
 
             frame = {
                 "req": "encrypted",
                 "iv": base64.b64encode(iv).decode(),
                 "rsa": rsa_b64,
-                "aes": enc.stdout.decode().strip(),
+                "aes": enc_b64,
                 "v": 1,
             }
             self._ws.send(json.dumps(frame, separators=(",", ":"), ensure_ascii=False))
@@ -442,17 +466,13 @@ class FnosClient:
         secret_b64 = r.get("secret") or ""
         if not secret_b64:
             return None
-        dec = subprocess.run(
-            ["openssl", "enc", "-d", "-aes-256-cbc",
-             "-K", aes_key.hex(), "-iv", iv.hex()],
-            input=base64.b64decode(secret_b64),
-            capture_output=True, timeout=20,
-        )
-        raw = dec.stdout
-        padlen = raw[-1] if raw else 0
-        if 0 < padlen <= 16:
-            raw = raw[:-padlen]
-        return raw
+        # ★ 纯 Python AES + 严格 PKCS7 校验（篡改会抛 BadPadding）
+        try:
+            return _aes.cbc_decrypt(
+                base64.b64decode(secret_b64), aes_key, iv)
+        except (_aes.BadPadding, ValueError) as exc:
+            log.warning("解密 secret 失败（填充校验）: %s", exc)
+            return None
 
     # --------------------------------------------------------- 签名调用
 
@@ -460,7 +480,7 @@ class FnosClient:
         self._counter += 1
         return (
             f"{int(time.time()):08x}"
-            f"{random.getrandbits(32):08x}"
+            f"{secrets.randbits(32):08x}"
             f"{self._counter:012x}"
         )
 

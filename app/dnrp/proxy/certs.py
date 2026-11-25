@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import ssl
@@ -532,6 +533,23 @@ def list_all_certs() -> list[dict[str, Any]]:
     return out
 
 
+def _cert_fingerprint(path: str) -> tuple[float, int, str]:
+    """证书/密钥文件的轻量指纹：(mtime, size, 前 256 字节 sha256 前 16 位)。
+
+    单纯 mtime 不可靠：秒级精度、原子替换保留 mtime、NTP 回拨
+    都可能让续期后的新证书被旧缓存挡住。加 size 和内容前缀后，
+    除非攻击者刻意构造，否则内容一变指纹必变。
+    """
+    try:
+        st = Path(path).stat()
+        with open(path, "rb") as fh:
+            head = fh.read(256)
+        digest = hashlib.sha256(head).hexdigest()[:16]
+        return (st.st_mtime, st.st_size, digest)
+    except OSError:
+        return (0.0, 0, "")
+
+
 def build_ssl_context_loader():
     """构造一个「按 SNI 动态加载证书」的 SSLContext。
 
@@ -552,32 +570,31 @@ def build_ssl_context_loader():
     base.options |= ssl.OP_NO_COMPRESSION
 
     # 缓存：servername -> (cert_path, key_path, cert_mtime, key_mtime)
-    cache: dict[str, tuple[str, str, float, float]] = {}
-
-    # 预建的 per-domain context 缓存：servername -> (SSLContext, mtimes)
-    ctx_cache: dict[str, tuple[ssl.SSLContext, float, float]] = {}
+    # servername -> (cert_path, key_path, cert_fp, key_fp)
+    cache: dict[str, tuple[str, str, tuple, tuple]] = {}
+    # servername -> (SSLContext, cert_fp, key_fp)
+    ctx_cache: dict[str, tuple[ssl.SSLContext, tuple, tuple]] = {}
 
     def resolve(servername: str) -> tuple[str, str] | None:
         entry = pick_cert(servername)
         if not entry:
             return None
-        try:
-            cm = Path(entry.cert_path).stat().st_mtime
-            km = Path(entry.key_path).stat().st_mtime
-        except OSError:
+        cfp = _cert_fingerprint(entry.cert_path)
+        kfp = _cert_fingerprint(entry.key_path)
+        if cfp == (0.0, 0, "") or kfp == (0.0, 0, ""):
             return None
 
         cached = cache.get(servername)
-        if cached and cached[2] == cm and cached[3] == km:
+        if cached and cached[2] == cfp and cached[3] == kfp:
             return cached[0], cached[1]
 
-        cache[servername] = (entry.cert_path, entry.key_path, cm, km)
-        # mtime 变了，作废该域名的 context
+        cache[servername] = (entry.cert_path, entry.key_path, cfp, kfp)
+        # 指纹变了，作废该域名的 context（关键：续期后不会再用旧证书）
         ctx_cache.pop(servername, None)
         return entry.cert_path, entry.key_path
 
     def make_ctx(servername: str, cert_path: str, key_path: str,
-                 cm: float, km: float) -> ssl.SSLContext | None:
+                 cfp: tuple, kfp: tuple) -> ssl.SSLContext | None:
         try:
             new_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             new_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
@@ -585,7 +602,7 @@ def build_ssl_context_loader():
             new_ctx.load_cert_chain(cert_path, key_path)
         except (ssl.SSLError, OSError):
             return None
-        ctx_cache[servername] = (new_ctx, cm, km)
+        ctx_cache[servername] = (new_ctx, cfp, kfp)
         return new_ctx
 
     def sni_callback(
@@ -600,18 +617,17 @@ def build_ssl_context_loader():
             return
         cert_path, key_path = pair
 
-        try:
-            cm = Path(cert_path).stat().st_mtime
-            km = Path(key_path).stat().st_mtime
-        except OSError:
+        cfp = _cert_fingerprint(cert_path)
+        kfp = _cert_fingerprint(key_path)
+        if cfp == (0.0, 0, "") or kfp == (0.0, 0, ""):
             return
 
         cached = ctx_cache.get(servername)
-        if cached and cached[1] == cm and cached[2] == km:
+        if cached and cached[1] == cfp and cached[2] == kfp:
             sslobj.context = cached[0]
             return
 
-        new_ctx = make_ctx(servername, cert_path, key_path, cm, km)
+        new_ctx = make_ctx(servername, cert_path, key_path, cfp, kfp)
         if new_ctx is not None:
             sslobj.context = new_ctx
         # 失败则保持默认上下文（默认证书），不中断握手

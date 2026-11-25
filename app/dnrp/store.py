@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS cert_link (
     auto_renew      INTEGER NOT NULL DEFAULT 1,
     desc_text       TEXT,
     created_time    INTEGER NOT NULL,
-    updated_time    INTEGER NOT NULL
+    updated_time    INTEGER NOT NULL,
+    UNIQUE(fnos_cert_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_proxy_port ON proxy_rule(listen_port);
@@ -187,6 +188,13 @@ def upsert_proxy_rule(data: dict[str, Any], path: Path | None = None) -> int:
             f"VALUES ({ph}, ?, ?)",
             (*values, now, now),
         )
+        # 冲突分支回查真实 id
+        cid = data.get("fnos_cert_id")
+        if cid is not None:
+            row = conn.execute(
+                "SELECT id FROM cert_link WHERE fnos_cert_id=?", (cid,)).fetchone()
+            if row:
+                return int(row["id"])
         return int(cur.lastrowid)
 
 
@@ -224,18 +232,22 @@ def upsert_ddns(data: dict[str, Any], path: Path | None = None) -> int:
                updated_time=excluded.updated_time
             """,
             (
-                data["domain"],
-                data["zone"],
+                data.get("domain") or "",
+                data.get("zone") or "",
                 data.get("provider", "cloudflare"),
                 data.get("fnos_record_id"),
                 data.get("template_domain"),
-                int(data.get("update_interval", 5)),
+                int(data.get("update_interval", 5) or 5),
                 1 if data.get("enabled", True) else 0,
                 now,
                 now,
             ),
         )
-        return int(cur.lastrowid or 0)
+        # ON CONFLICT DO UPDATE 时 lastrowid 不可靠，回查真实 id
+        dom = data.get("domain") or ""
+        row = conn.execute(
+            "SELECT id FROM ddns_link WHERE domain=?", (dom,)).fetchone()
+        return int(row["id"]) if row else int(cur.lastrowid or 0)
 
 
 def delete_ddns(domain: str, path: Path | None = None) -> bool:
@@ -262,11 +274,18 @@ def upsert_cert(data: dict[str, Any], path: Path | None = None) -> int:
               (fnos_cert_id, primary_domain, domains, key_type,
                auto_renew, desc_text, created_time, updated_time)
             VALUES (?,?,?,?,?,?,?,?)
+            ON CONFLICT(fnos_cert_id) DO UPDATE SET
+               primary_domain=excluded.primary_domain,
+               domains=excluded.domains,
+               key_type=excluded.key_type,
+               auto_renew=excluded.auto_renew,
+               desc_text=excluded.desc_text,
+               updated_time=excluded.updated_time
             """,
             (
                 data.get("fnos_cert_id"),
-                data["primary_domain"],
-                data["domains"],
+                data.get("primary_domain") or "",
+                data.get("domains") or "",
                 data.get("key_type", "RSA"),
                 1 if data.get("auto_renew", True) else 0,
                 data.get("desc_text"),
