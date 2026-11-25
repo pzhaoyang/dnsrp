@@ -298,7 +298,7 @@ def _parse_time(text: str) -> float:
 
 
 def _fnos_cert_info() -> dict[str, dict]:
-    """从 fnOS 证书库拿「域名 -> {id, renewal, des}」映射。
+    """从 fnOS 证书库拿「域名 -> 证书信息」映射。
 
     为什么要这一步：
       network_gateway_cert.conf 是「域名 → 证书文件路径」的映射，
@@ -309,6 +309,18 @@ def _fnos_cert_info() -> dict[str, dict]:
       证书路径形如 /usr/trim/var/trim_connect/ssls/<domain>/<ts>/fullchain.crt
                                           └──────┬──────┘
                                             这就是 cert 表的 domain 字段
+
+    ★ 自动续签的两种来源（2026-11-25 实测）：
+
+      | source   | renewal | issuedBy      | 谁来续              |
+      |----------|---------|---------------|---------------------|
+      | upload   | 1       | YE1/YR1 (LE)  | fnOS ACME 定时任务  |
+      | trim     | 0       | YR1 (LE)      | FN Connect 服务     |
+      | system   | 0       | fnOS          | 自签，不会续        |
+
+      注意 FN Connect 那张（source=trim）**renewal 是 0**，
+      它由 FN Connect 自己的服务续期，不走 cert_renew 表。
+      所以判断「会不会自动续」不能只看 renewal，要看 source。
 
     拿不到就返回空 dict —— 删除/续期按钮显示为不可用，不影响其他功能。
     """
@@ -339,13 +351,30 @@ def _fnos_cert_info() -> dict[str, dict]:
             for row in cert_mgr.list_certs(cli):
                 dom = str(row.get("domain") or "")
                 cid = row.get("id")
-                if dom and cid is not None:
-                    out[dom] = {
-                        "id": int(cid),
-                        # renewal=1 表示有续签资格，可以手动续期
-                        "renewal": int(row.get("renewal") or 0),
-                        "des": str(row.get("des") or ""),
-                    }
+                if not dom or cid is None:
+                    continue
+
+                renewal = int(row.get("renewal") or 0)
+                source = str(row.get("source") or "")
+
+                # 谁会续这张证书
+                if renewal == 1:
+                    renew_by = "acme"       # fnOS 的 ACME 定时任务
+                elif source == "trim":
+                    renew_by = "fnconnect"  # FN Connect 服务
+                else:
+                    renew_by = ""           # 自签 / 导入，不续
+
+                out[dom] = {
+                    "id": int(cid),
+                    # renewal=1 表示有证书续签配置，可以手动续期
+                    "renewal": renewal,
+                    "des": str(row.get("des") or ""),
+                    "source": source,
+                    "issuedBy": str(row.get("issuedBy") or ""),
+                    "autoRenew": bool(renew_by),
+                    "renewBy": renew_by,
+                }
         finally:
             cli.close()
     except Exception as exc:               # noqa: BLE001
@@ -448,6 +477,12 @@ def list_all_certs() -> list[dict[str, Any]]:
         d["certId"] = info_row.get("id")
         d["renewal"] = info_row.get("renewal", 0)
         d["certDir"] = cert_dir
+        # ★ 自动续签：不能只看 renewal —— FN Connect 那张 renewal=0
+        #   但确实会被 FN Connect 服务自动续期（见 _fnos_cert_info 说明）
+        d["autoRenew"] = bool(info_row.get("autoRenew"))
+        d["renewBy"] = info_row.get("renewBy", "")
+        d["certSource"] = info_row.get("source", "")
+        d["issuedBy"] = info_row.get("issuedBy", "") or d.get("issuer", "")
 
         # ★ 标记「系统内置证书」，默认在 UI 隐藏
         #

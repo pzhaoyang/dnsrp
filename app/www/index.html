@@ -1262,10 +1262,15 @@ function renderCerts(rows) {
         <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(c.issuer)}</td>
         <td><span class="tag">${esc(c.keyType || '-')}</span></td>
         <td class="mono">${esc(new Date(c.notAfter * 1000).toLocaleDateString())}${
-          c.renewal
+          c.autoRenew
             ? '<div style="margin-top:3px"><span class="tag ok" '
-              + 'title="到期前飞牛 OS 会自动向 Let\'s Encrypt 续期">'
-              + '自动续签</span></div>'
+              + 'title="'
+              + (c.renewBy === 'fnconnect'
+                  ? '由飞牛 OS 的 FN Connect 服务自动续期'
+                  : '到期前飞牛 OS 会自动向 Let\'s Encrypt 续期')
+              + '">'
+              + (c.renewBy === 'fnconnect' ? '自动续签 · FN Connect' : '自动续签')
+              + '</span></div>'
             : ''
         }</td>
         <td>${domCell}</td>
