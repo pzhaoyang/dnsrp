@@ -736,7 +736,7 @@ async function loadProxy() {
     box.innerHTML = `
       <table>
         <thead><tr>
-          <th>名称</th><th>域名</th><th>监听</th><th>后端</th><th>状态</th><th style="width:120px">操作</th>
+          <th>名称</th><th>域名</th><th>监听</th><th>后端</th><th>状态</th><th style="width:190px;white-space:nowrap">操作</th>
         </tr></thead>
         <tbody>
         ${rows.map((r) => `
@@ -747,10 +747,10 @@ async function loadProxy() {
               <span class="tag ${r.listen_tls ? 'pri' : ''}">${r.listen_tls ? 'TLS' : 'HTTP'}</span>
             </td>
             <td class="mono">${esc(r.target_scheme)}://${esc(r.target_host)}:${esc(r.target_port)}</td>
-            <td><button class="mini ${r.enabled ? 'ok-btn' : 'off-btn'}"
+            <td style="white-space:nowrap"><button class="mini ${r.enabled ? 'ok-btn' : 'off-btn'}"
               onclick="toggleRule(${esc(r.id)}, ${r.enabled ? 'false' : 'true'}, '${esc(r.name)}')"
               title="点击${r.enabled ? '禁用' : '启用'}此规则">${r.enabled ? '启用' : '停用'}</button></td>
-            <td>
+            <td style="white-space:nowrap">
               <button class="mini" onclick="openRule(${esc(r.id)})">编辑</button>
               <button class="mini danger" onclick="delRule(${esc(r.id)}, '${esc(r.name)}')">删除</button>
             </td>
