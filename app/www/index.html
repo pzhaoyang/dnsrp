@@ -918,6 +918,86 @@ function isCertReallyUsed(cert) {
   return doms.some((d) => ACTIVE_PROXY_DOMAINS.has(String(d).trim().toLowerCase()));
 }
 
+// 手动续期证书
+//
+// ★ 续期和删除是两件独立的事：
+//   在用的证书**可以续期**（换新证书、有效期重置），只是不能删除。
+//
+// ★ 续期要重新走 ACME DNS-01，通常 25~120 秒，所以要给可见进度。
+async function renewCert(certId, label) {
+  const ok = await showConfirm({
+    title: '续期证书',
+    body: `
+      <div style="margin-bottom:12px">确认要为这张证书申请续期？</div>
+      <div style="padding:10px;background:var(--bg2);border-radius:4px;
+                  font-family:monospace;font-size:13px;margin-bottom:12px">
+        ${esc(label)}
+      </div>
+      <div style="color:var(--tx2);font-size:12px;line-height:1.8">
+        · 会向 Let's Encrypt 重新申请一张新证书<br>
+        · 有效期从今天重新计算 90 天<br>
+        · 域名和覆盖范围保持不变<br>
+        · 全程约 25~120 秒，需要 DNS 凭据有效
+      </div>`,
+    okText: '开始续期',
+  });
+  if (!ok) return;
+
+  if (!capOk('cert.issue')) {
+    toast('当前环境无法连接飞牛 OS 证书接口', 'err');
+    return;
+  }
+
+  // 续期较慢，用对话框给出持续反馈
+  const dlg = showDialog('正在续期', `
+    <div style="text-align:center;padding:16px 0">
+      <div class="spin" style="margin:0 auto 12px"></div>
+      <div>正在向 Let's Encrypt 重新申请证书</div>
+      <div style="color:var(--tx2);font-size:12px;margin-top:8px"
+           id="renew-elapsed">已等待 0 秒，通常需要 25~120 秒</div>
+    </div>`, []);
+
+  let sec = 0;
+  const timer = setInterval(() => {
+    sec += 1;
+    const el = document.getElementById('renew-elapsed');
+    if (el) el.textContent = `已等待 ${sec} 秒，通常需要 25~120 秒`;
+  }, 1000);
+
+  try {
+    const r = await api('certs/renew', { method: 'POST', body: { id: certId } });
+    cacheDrop('certs', 'overview');
+    dlg.remove();
+    showDialog('续期成功', `
+      <div style="margin-bottom:14px;padding:10px;background:var(--bg2);
+                  border-left:3px solid var(--ok);border-radius:4px">
+        证书已更新，有效期重新计算。
+      </div>
+      <table style="width:100%;font-size:13px">
+        <tr><td style="color:var(--tx2);width:80px">域名</td>
+            <td style="font-family:monospace">${esc(r.domain || label)}</td></tr>
+        <tr><td style="color:var(--tx2)">状态</td>
+            <td>${esc(r.status || 'success')}</td></tr>
+        <tr><td style="color:var(--tx2)">说明</td>
+            <td>${esc(r.note || '')}</td></tr>
+      </table>`, [{ text: '知道了', pri: true }]);
+    loadCerts(true);
+    loadOverview();
+  } catch (e) {
+    dlg.remove();
+    showDialog('续期失败', `
+      <div style="line-height:1.7;white-space:pre-wrap">${esc(e.message)}</div>
+      <div style="margin-top:12px;color:var(--tx2);font-size:12px">
+        常见原因：<br>
+        · 该域名在 DDNS 里没有同名记录（fnOS 要求域名完全一致）<br>
+        · DNS 服务商凭据失效或权限不足<br>
+        · 域名解析还没生效
+      </div>`, [{ text: '知道了', pri: true }]);
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 async function delCert(certId, label) {
   const ok = await showConfirm({
     title: '删除证书',
@@ -1138,19 +1218,42 @@ function renderCerts(rows) {
       //   · 只有「该证书覆盖的域名中，至少一个仍在反代规则里启用」才算真占用
       //
       //   否则用户删了反代规则后，证书永远显示"使用中"，删不掉。
+      //
+      // ★ 「续期」与「删除」是独立的两件事：
+      //   在用的证书**可以续期**（换一张新的、有效期重置），
+      //   只是不能删除。所以两个按钮分别判断。
       const inUse = isCertReallyUsed(c);
+      const canRenew = !c.isFallback && c.certId != null && c.renewal;
+      const canDelete = !c.isFallback && c.certId != null && !inUse;
+
+      const btns = [];
+      if (canRenew) {
+        btns.push(`<button class="mini" onclick="renewCert(${c.certId}, `
+          + `'${esc(c.primaryDomain || c.host)}')">续期</button>`);
+      }
+      if (canDelete) {
+        btns.push(`<button class="mini" onclick="delCert(${c.certId}, `
+          + `'${esc(c.primaryDomain || c.host)}')">删除</button>`);
+      }
+
       let opCell;
       if (c.isFallback) {
         opCell = '<span style="color:var(--tx2);font-size:12px" '
-          + 'title="兜底证书是系统的安全网，删除后未匹配域名将无证书可用">兜底保护</span>';
+          + 'title="兜底证书是系统的安全网，不能删除也不能续期">兜底保护</span>';
       } else if (c.certId == null) {
         opCell = '<span style="color:var(--tx2);font-size:12px">—</span>';
-      } else if (inUse) {
-        opCell = `<span style="color:var(--tx2);font-size:12px" `
-          + `title="该域名仍在反向代理中使用，先去删掉对应规则">使用中</span>`;
+      } else if (!btns.length) {
+        opCell = '<span style="color:var(--tx2);font-size:12px" '
+          + 'title="该域名仍在反向代理中使用，不能删除；也没有续签资格">使用中</span>';
       } else {
-        opCell = `<button class="mini" onclick="delCert(${c.certId}, `
-          + `'${esc(c.primaryDomain || c.host)}')">删除</button>`;
+        opCell = btns.join(' ');
+        // 在用时给删除按钮加个说明（灰掉但不隐藏）
+        if (inUse) {
+          opCell = btns.join(' ') + ' <span style="color:var(--tx2);'
+            + 'font-size:11px;margin-left:4px" '
+            + 'title="该域名仍在反向代理中使用，需先删除规则才能删除证书">'
+            + '使用中</span>';
+        }
       }
 
       return `<tr>

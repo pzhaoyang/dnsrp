@@ -297,21 +297,22 @@ def _parse_time(text: str) -> float:
 # ---------------------------------------------------------------- 对外接口
 
 
-def _fnos_cert_ids() -> dict[str, int]:
-    """从 fnOS 证书库拿「域名 -> 证书id」映射，用于 UI 的删除操作。
+def _fnos_cert_info() -> dict[str, dict]:
+    """从 fnOS 证书库拿「域名 -> {id, renewal, des}」映射。
 
     为什么要这一步：
       network_gateway_cert.conf 是「域名 → 证书文件路径」的映射，
-      里面**没有 fnOS 的证书 id**。而删除接口 cert.remove 需要 id。
+      里面**没有 fnOS 的证书 id**，也没有续签标志。
+      而删除/续期接口需要 id，UI 需要 renewal 判断能否续期。
 
     映射方式：用证书文件所在目录的域名去匹配 cert.list 里的 domain。
       证书路径形如 /usr/trim/var/trim_connect/ssls/<domain>/<ts>/fullchain.crt
                                           └──────┬──────┘
                                             这就是 cert 表的 domain 字段
 
-    拿不到就返回空 dict —— 删除按钮会显示为不可用，不影响其他功能。
+    拿不到就返回空 dict —— 删除/续期按钮显示为不可用，不影响其他功能。
     """
-    out: dict[str, int] = {}
+    out: dict[str, dict] = {}
 
     cfg = None
     try:
@@ -339,11 +340,16 @@ def _fnos_cert_ids() -> dict[str, int]:
                 dom = str(row.get("domain") or "")
                 cid = row.get("id")
                 if dom and cid is not None:
-                    out[dom] = int(cid)
+                    out[dom] = {
+                        "id": int(cid),
+                        # renewal=1 表示有续签资格，可以手动续期
+                        "renewal": int(row.get("renewal") or 0),
+                        "des": str(row.get("des") or ""),
+                    }
         finally:
             cli.close()
     except Exception as exc:               # noqa: BLE001
-        log.info("读取 fnOS 证书 id 失败（删除按钮将不可用）: %s", exc)
+        log.info("读取 fnOS 证书信息失败（删除/续期按钮将不可用）: %s", exc)
 
     return out
 
@@ -409,7 +415,7 @@ def list_all_certs() -> list[dict[str, Any]]:
     entries = load_registry()
 
     # 拿 fnOS 证书 id（失败则为空，删除按钮不可用但不影响展示）
-    id_map = _fnos_cert_ids()
+    info_map = _fnos_cert_info()
 
     # 按证书文件路径聚合：cert_path -> {hosts: [...], entry: CertEntry}
     groups: dict[str, dict[str, Any]] = {}
@@ -436,9 +442,11 @@ def list_all_certs() -> list[dict[str, Any]]:
         d["coveredDomains"] = [h for h in hosts if h != "fallback"]
         d["domainCount"] = len(d["coveredDomains"])
 
-        # fnOS 证书 id：用证书目录名去查
+        # fnOS 证书信息：用证书目录名去查
         cert_dir = _dom_from_cert_path(path)
-        d["certId"] = id_map.get(cert_dir)
+        info_row = info_map.get(cert_dir) or {}
+        d["certId"] = info_row.get("id")
+        d["renewal"] = info_row.get("renewal", 0)
         d["certDir"] = cert_dir
 
         # ★ 标记「系统内置证书」，默认在 UI 隐藏

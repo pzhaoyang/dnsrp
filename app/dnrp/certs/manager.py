@@ -375,6 +375,154 @@ def _restore_desc(
     return True
 
 
+def renew_cert(api: FnosClient, cert_id: Any,
+               wait: bool = True, timeout: float = 180) -> dict[str, Any]:
+    """手动触发一张证书的续期（走 fnOS 的 ACME 引擎）。
+
+    ★ 与自动续签的关系：
+      fnOS 自己会在证书快到期时自动续（前提是 renewal=1）。
+      本函数是**手动立即续期**，用于：
+        * 用户想马上换一张新证书
+        * 自动续签失败后手动重试
+        * 调整了 SAN / 换算法后立即生效
+
+    ★ 参数：`appcgi.netsvr.cert.renew` 只要 id。
+      返回 processId（可能是数字或字符串），需要轮询 applystatus。
+
+    ⚠️ 限制（实测）：
+      * renewal=0 的证书不能续（fnOS 侧没有续签配置）——
+        本函数会先检查，不满足就明确报错。
+      * 续期会重新走一次 DNS-01，需要对应 DDNS 记录的凭据有效。
+      * 证书主域名必须与 cert_renew.ddns_related_id 指向的 DDNS 记录
+        域名一致，否则报 Cert Apply Domain Not Match。
+
+    返回 {id, domain, status, note}。
+    """
+    if cert_id is None:
+        raise ValueError("续期需要证书 id")
+
+    # 1. 前置检查：证书存在且具备续签资格
+    rows = list_certs(api)
+    target = None
+    for r in rows:
+        if r.get("id") == cert_id:
+            target = r
+            break
+
+    if target is None:
+        raise CertError(f"证书不存在: id={cert_id}")
+
+    if int(target.get("renewal") or 0) != 1:
+        raise CertError(
+            f"「{target.get('domain')}」这张证书没有续签资格（renewal=0）。\n\n"
+            f"可能原因：\n"
+            f"  · 这不是通过本应用签发的证书（fnOS 系统证书不需要续签）\n"
+            f"  · 证书是导入的，缺少 cert_renew 配置\n\n"
+            f"解决方式：用「申请证书」重新签一张，或到飞牛 OS 证书管理里操作。"
+        )
+
+    # 2. 触发续期
+    try:
+        proc_id = api.call("appcgi.netsvr.cert.renew",
+                           {"id": int(cert_id)}, timeout=60)
+    except FnosWsError as exc:
+        msg = str(exc)
+        if "3000033" in msg:
+            raise CertError(
+                f"{exc}\n\n"
+                f"提示：这是「证书域名与 DDNS 记录不匹配」导致的。\n"
+                f"fnOS 要求证书主域名与 cert_renew 绑定的 DDNS 记录域名完全一致。\n"
+                f"请确认 {target.get('domain')} 在 DDNS 列表里有同名记录。"
+            ) from exc
+        if "3000025" in msg:
+            raise CertError(
+                f"{exc}\n\n提示：该证书正在被使用中，暂时不能续期。"
+            ) from exc
+        raise CertError(f"触发续期失败: {exc}") from exc
+
+    # 3. 轮询结果
+    status = ""
+    if wait and proc_id is not None:
+        status = _poll_issue(api, proc_id, timeout=timeout)
+
+    ok = status in ("success", "suc") if status else True
+    note = ("续期成功" if ok else f"已提交续期请求（状态 {status or '处理中'}）")
+
+    # 4. 续期后回读确认 renewed 状态与 renewal 标志
+    try:
+        after = None
+        for r in list_certs(api):
+            if r.get("id") == cert_id:
+                after = r
+                break
+        if after:
+            if int(after.get("renewal") or 0) != 1:
+                log.warning("续期后 %s 的 renewal 变成 0，尝试修正",
+                            target.get("domain"))
+                _fix_renewal_flag(api, cert_id, after, timeout)
+            note += f"（当前状态 {after.get('status')}，renewal={after.get('renewal')}）"
+    except FnosWsError as exc:
+        log.warning("续期后回读失败: %s", exc)
+
+    return {
+        "id": cert_id,
+        "domain": target.get("domain", ""),
+        "status": status or "submitted",
+        "ok": ok,
+        "note": note,
+    }
+
+
+def _fix_renewal_flag(api: FnosClient, cert_id: Any, cert: dict[str, Any],
+                      timeout: float = 60) -> None:
+    """把被意外清掉的 renewal 补回 1。
+
+    续期和补备注都会走 cert.replace；任何一次忘了带 renewal 就会清成 0。
+    这里从磁盘读真证书重新 replace 一次，带上 renewal=1。
+    """
+    dom = cert.get("domain", "")
+    d = seed.find_issued_dir(dom, 0)
+    if not d:
+        return
+    pair = seed.find_cert_in_dir(d)
+    if not pair:
+        return
+    cert_pem, key_pem = pair
+    if not key_pem:
+        return
+
+    import base64 as _b64
+
+    # 找一条匹配的 DDNS 记录
+    ddns_id = None
+    try:
+        from ..ddns import api_client
+        for r in api_client.list_records(api):
+            if r.get("domain") == dom:
+                ddns_id = r.get("id")
+                break
+    except FnosWsError:
+        pass
+
+    payload = {
+        "privateKeyBase64": _b64.b64encode(key_pem.encode()).decode(),
+        "certificateBase64": _b64.b64encode(cert_pem.encode()).decode(),
+        "issuerCertificateBase64": "",
+        "desc": cert.get("des") or "DNS-RP",
+        "id": int(cert_id),
+        "isDefault": int(cert.get("isDefault") or 0),
+        "privateKeyPath": "",
+        "certificatePath": "",
+        "issuerCertificatePath": "",
+        "renewal": 1,
+    }
+    if ddns_id is not None:
+        payload["relatedDDNSId"] = int(ddns_id)
+
+    api.call("appcgi.netsvr.cert.replace", payload, timeout=timeout)
+    log.info("已补回 %s 的 renewal=1", dom)
+
+
 def list_certs(api: FnosClient) -> list[dict[str, Any]]:
     """列出 fnOS 证书库。"""
     rows = api.call("appcgi.netsvr.cert.list") or []

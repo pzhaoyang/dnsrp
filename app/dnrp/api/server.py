@@ -319,6 +319,7 @@ class ApiApp:
         r.add("GET",  "/api/certs",             self.h_certs_list)
         r.add("GET",  "/api/certs/matched",     self.h_certs_matched)
         r.add("POST", "/api/certs/issue",       self.h_certs_issue)
+        r.add("POST", "/api/certs/renew",       self.h_certs_renew)
         r.add("POST", "/api/certs/delete",      self.h_certs_delete)
 
         r.add("GET",  "/api/ddns",              self.h_ddns_list)
@@ -553,6 +554,53 @@ class ApiApp:
             "picked": picked.host if picked else None,
             "readable": picked.readable() if picked else False,
         })
+
+    async def h_certs_renew(self, req: Request) -> Response:
+        """手动续期一张证书（走 fnOS 的 ACME 引擎）。
+
+        ★ 用途：
+          fnOS 会在证书快到期时自动续（renewal=1），
+          但用户可能想立即换一张新证书，或自动续签失败后手动重试。
+
+        ★ 前置条件：证书必须有续签资格（renewal=1）。
+          fnOS 的系统证书（兜底 / FN Connect）没有，会被拒绝。
+
+        ★ 续期要重新走 DNS-01，通常 25~120 秒，所以放线程里跑。
+        """
+        if not _load_fn_cfg():
+            return Response.error("尚未配置飞牛 OS 账号，请到「设置」填写。", 400)
+
+        data = req.json()
+        cert_id = data.get("id")
+        if cert_id is None:
+            return Response.error("缺少证书 id")
+
+        try:
+            cert_id = int(cert_id)
+        except (TypeError, ValueError):
+            return Response.error("证书 id 必须是整数")
+
+        def _do() -> dict[str, Any]:
+            from ..certs import manager as cert_mgr
+
+            cli = _fn_client()
+            try:
+                return cert_mgr.renew_cert(cli, cert_id, wait=True)
+            finally:
+                cli.close()
+
+        try:
+            res = await asyncio.get_running_loop().run_in_executor(None, _do)
+            if res.get("ok"):
+                capabilities.invalidate("cert.issue", "")
+                return Response.ok(res)
+            return Response.error(res.get("note") or "续期未完成", 502)
+        except Exception as exc:           # noqa: BLE001
+            from ..certs import manager as cert_mgr
+
+            if isinstance(exc, cert_mgr.CertError):
+                return Response.error(str(exc), 400)
+            return Response.error(f"续期失败: {str(exc)[:200]}", 502)
 
     async def h_certs_delete(self, req: Request) -> Response:
         """删除 fnOS 证书库里的某张证书（走 cert.remove）。
