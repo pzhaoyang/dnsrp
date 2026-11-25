@@ -59,7 +59,11 @@ button.ok-btn{background:#e8f7ee;border-color:#a8dfc0;color:#1a7a45}
 button.ok-btn:hover{background:#d5f0e2}
 button.off-btn{background:#f2f3f5;border-color:#d5d8dc;color:#8a8f96}
 button.off-btn:hover{background:#e8eaed}
-button:disabled{opacity:.5;cursor:not-allowed}
+button:disabled,button:disabled:hover{
+  opacity:1;cursor:not-allowed;
+  background:#f2f3f5!important;border-color:#e0e2e5!important;
+  color:#a8acb3!important;filter:none!important;
+}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{
   text-align:left;padding:10px 12px;background:#fafbfc;color:var(--tx2);
@@ -1283,53 +1287,42 @@ function renderCerts(rows) {
         && (renewBy === 'acme' || renewBy === 'system');
       const canDelete = c.certId != null && !isSystem && !inUse;
 
-      // 提示文字（按钮下方一行，小号灰字）
-      let hint = '';
-      let hintTip = '';
-      if (renewBy === 'fnconnect') {
-        hint = '系统管理 · FN Connect';
-        hintTip = 'FN Connect 专属证书，由飞牛 OS 自动管理，不能续期或删除';
-      } else if (renewBy === 'system') {
-        hint = '系统证书 · 不可删除';
-        hintTip = 'fnOS 自签兜底证书，可重新生成，但不能删除';
-      } else if (inUse) {
-        hint = '使用中';
-        hintTip = '该域名仍在反向代理中使用，需先删除规则才能删除证书';
+      // 不能操作时的原因（作为灰按钮的 tooltip）
+      let renewWhy = '';
+      let deleteWhy = '';
+      if (!canRenew) {
+        renewWhy = renewBy === 'fnconnect'
+          ? 'FN Connect 专属证书，由飞牛 OS 自动管理，不能手动续期'
+          : '这张证书没有续签配置，不能续期';
+      }
+      if (!canDelete) {
+        if (isSystem) {
+          deleteWhy = renewBy === 'fnconnect'
+            ? 'FN Connect 专属证书，删除会中断远程访问'
+            : 'fnOS 自签兜底证书，不能删除';
+        } else if (inUse) {
+          deleteWhy = '该域名仍在反向代理中使用，需先删除规则才能删除证书';
+        } else {
+          deleteWhy = '这张证书不能删除';
+        }
       }
 
-      // 两行布局：
-      //   第 1 行：续期 / 删除两个固定位置的按钮（缺哪个就留空，位置不变）
-      //   第 2 行：状态提示（有才显示）
-      const renewBtn = canRenew
-        ? `<button class="mini" onclick="renewCert(${c.certId}, `
-          + `'${esc(c.primaryDomain || c.host)}', '${renewBy}')">续期</button>`
-        : '';
-      const deleteBtn = canDelete
-        ? `<button class="mini danger" onclick="delCert(${c.certId}, `
-          + `'${esc(c.primaryDomain || c.host)}')">删除</button>`
-        : '';
+      // 两个按钮始终显示，不可用时 disabled 灰掉（位置固定不再变化）
+      const renewBtn = `<button class="mini" `
+        + (canRenew
+            ? `onclick="renewCert(${c.certId}, '${esc(c.primaryDomain || c.host)}', '${renewBy}')"`
+            : `disabled title="${esc(renewWhy)}"`)
+        + `>续期</button>`;
+      const deleteBtn = `<button class="mini danger" `
+        + (canDelete
+            ? `onclick="delCert(${c.certId}, '${esc(c.primaryDomain || c.host)}')"`
+            : `disabled title="${esc(deleteWhy)}"`)
+        + `>删除</button>`;
 
-      let opCell;
-      if (c.certId == null) {
-        opCell = '<span style="color:var(--tx2)">—</span>';
-      } else {
-        const hasBtn = canRenew || canDelete;
-        let cell = '<span style="display:inline-block;vertical-align:middle">';
-        if (hasBtn) {
-          cell += '<span style="display:flex;gap:6px;align-items:center">'
-            + '<span style="display:inline-flex;justify-content:center;width:58px">'
-            + renewBtn + '</span>'
-            + '<span style="display:inline-flex;justify-content:center;width:58px">'
-            + deleteBtn + '</span></span>';
-        }
-        if (hint) {
-          cell += '<span style="display:block;margin-top:6px;color:var(--tx2);'
-            + 'font-size:12px;white-space:nowrap"'
-            + (hintTip ? ` title="${esc(hintTip)}"` : '')
-            + '>' + esc(hint) + '</span>';
-        }
-        opCell = cell + '</span>';
-      }
+      const opCell = c.certId == null
+        ? '<span style="color:var(--tx2)">—</span>'
+        : '<span style="display:inline-flex;gap:6px;align-items:center;'
+          + 'white-space:nowrap">' + renewBtn + deleteBtn + '</span>';
 
       return `<tr>
         <td><b>${esc(c.primaryDomain || c.host)}</b></td>
