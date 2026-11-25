@@ -1279,22 +1279,26 @@ function renderCerts(rows) {
 
       let opCell;
       if (c.isFallback) {
-        opCell = '<span style="color:var(--tx2);font-size:13px" '
+        opCell = '<span style="display:inline-flex;align-items:center;'
+          + 'color:var(--tx2);font-size:13px" '
           + 'title="兜底证书是系统的安全网，不能删除也不能续期">兜底保护</span>';
       } else if (c.certId == null) {
-        opCell = '<span style="color:var(--tx2);font-size:13px">—</span>';
+        opCell = '<span style="display:inline-flex;align-items:center;'
+          + 'color:var(--tx2);font-size:13px">—</span>';
       } else if (!btns.length) {
-        opCell = '<span style="color:var(--tx2);font-size:13px" '
+        opCell = '<span style="display:inline-flex;align-items:center;'
+          + 'color:var(--tx2);font-size:13px" '
           + 'title="该域名仍在反向代理中使用，不能删除；也没有续签资格">使用中</span>';
       } else {
-        opCell = btns.join(' ');
-        // 在用时给删除按钮加个说明（不隐藏）
+        // 用 inline-flex + align-items:center 让按钮与文字垂直居中对齐
+        let cell = '<span style="display:inline-flex;align-items:center;gap:6px">'
+          + btns.join('');
         if (inUse) {
-          opCell = btns.join(' ') + ' <span style="color:var(--tx2);'
-            + 'font-size:13px;margin-left:4px" '
+          cell += '<span style="color:var(--tx2);font-size:13px" '
             + 'title="该域名仍在反向代理中使用，需先删除规则才能删除证书">'
             + '使用中</span>';
         }
+        opCell = cell + '</span>';
       }
 
       return `<tr>
