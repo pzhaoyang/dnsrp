@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Read version from manifest
         id: ver
@@ -48,7 +48,7 @@ jobs:
           echo "manifest 版本: $VERSION, release tag: $TAG"
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.11'
 
@@ -113,7 +113,7 @@ jobs:
           sha256sum "$FPK"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.4
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: dnsrp ${{ steps.ver.outputs.version }}
