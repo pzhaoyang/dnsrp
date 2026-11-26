@@ -408,7 +408,11 @@ def probe(cred: Any = None, force: bool = False) -> CapabilitySet:
                 cap.was_ok = True
 
     _CACHE = cs
-    _CACHE_AT = now
+    # ★ 用「探测完成时刻」而非开始时刻写回缓存。
+    #   探测可能耗时 25s（如 cert.issue 登录超时），若用旧的 now，
+    #   期间 invalidate() 把 _CACHE_AT 置 0 后会被这里覆盖成旧值，
+    #   导致失效状态被错误地当成"仍然新鲜"持续整个 TTL。
+    _CACHE_AT = time.time()
     _CACHE_VERSION = ver
 
     log.info(
@@ -429,8 +433,12 @@ def invalidate(key: str = "", reason: str = "") -> None:
     if key and _CACHE is not None:
         cap = _CACHE.items.get(key)
         if cap is not None:
+            # ★ 只有"之前确实可用过"才标记 was_ok。
+            #   原写法 `cap.was_ok or True` 恒为 True，会让从未成功的
+            #   能力也被误报成"升级后失效"。
+            if cap.ok:
+                cap.was_ok = True
             cap.ok = False
-            cap.was_ok = cap.was_ok or True
             cap.reason = reason or cap.reason
             log.warning("能力 %s 标记为失效: %s", key, reason)
 

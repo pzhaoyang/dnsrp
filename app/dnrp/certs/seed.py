@@ -224,10 +224,15 @@ def find_cert_in_dir(dir_path: str) -> tuple[str, str] | None:
             elif cert_file is None:
                 cert_file = f
         if key_file is None and name.endswith(".key"):
-            if "private" in name or "private" in name:
-                key_file = f
-            elif key_file is None:
-                key_file = f
+            key_file = f
+
+    # 重新挑一次：私钥优先选 private.key / *.private.key，
+    # 避免同目录有 server.key 等其它 key 时选错（选错会毁掉证书密钥对）。
+    for f in p.iterdir():
+        if f.is_file() and f.name.lower().endswith(".key") \
+                and "private" in f.name.lower():
+            key_file = f
+            break
 
     # 重新挑一次：fullchain 优先
     if cert_file is None or "fullchain" not in cert_file.name.lower():

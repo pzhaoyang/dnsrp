@@ -1029,11 +1029,12 @@ class ApiApp:
         access_secret = (data.get("access_secret") or "").strip()
 
         # 凭据必填 —— 没凭据建出来的是死记录
-        if not access_key:
+        if not access_key or not access_secret:
+            missing = "Access Key / ID" if not access_key else "Secret / Key"
             return Response.error(
-                "必须填写 Access Key / ID。\n\n"
-                "飞牛 OS 需要用这个授权去更新 DNS 解析记录；"
-                "没有凭据的记录会一直停在 loading，既不上报 IP，"
+                f"必须填写 {missing}。\n\n"
+                "飞牛 OS 需要用完整的凭据去更新 DNS 解析记录；"
+                "缺少任何一项的记录会一直停在 loading，既不上报 IP，"
                 "证书也无法用它做 DNS-01 验证。\n\n"
                 "如果你想先建记录稍后补凭据，请到「系统设置 → 远程访问 → DDNS」操作。",
                 400,
@@ -1044,12 +1045,14 @@ class ApiApp:
 
             cli = _fn_client()
             try:
-                existing = {r["domain"]: r for r in api_client.list_records(cli)}
+                # ★ 域名大小写不敏感去重（DNS 域名本身不区分大小写）
+                existing = {str(r["domain"]).lower(): r
+                            for r in api_client.list_records(cli)}
                 out: list[dict[str, Any]] = []
 
                 for d in domains:
-                    if d in existing:
-                        cur = existing[d]
+                    if d.lower() in existing:
+                        cur = existing[d.lower()]
                         out.append({
                             "domain": d, "ok": True,
                             "note": f"已存在（状态 {cur.get('status')}），跳过",
@@ -1073,8 +1076,10 @@ class ApiApp:
                 cli.close()
 
         try:
-            return Response.ok(
-                await asyncio.get_running_loop().run_in_executor(None, _do))
+            result = await asyncio.get_running_loop().run_in_executor(None, _do)
+            # ★ 创建成功后也失效能力缓存，与 update/delete 保持一致
+            capabilities.invalidate("ddns.write", "")
+            return Response.ok(result)
         except Exception as exc:           # noqa: BLE001
             capabilities.invalidate("ddns.write", str(exc))
             return Response.error(_ddns_err(str(exc)), 502)

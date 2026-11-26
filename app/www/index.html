@@ -838,7 +838,8 @@ async function saveRule() {
     target_port: parseInt($('r-tport').value, 10),
     force_https: $('r-forcehttps').checked,
     preserve_host: $('r-preservehost').checked,
-    enabled: true,
+    // 编辑时保留原启用状态：改个名字不该把停用的规则重新打开
+    enabled: editingRule ? !!editingRule.enabled : true,
   };
   if (editingRule) data.id = editingRule.id;
 
@@ -1096,7 +1097,8 @@ async function delCert(certId, label) {
   try {
     await api('certs/delete', { method: 'POST', body: { id: certId } });
     toast(`✓ 已删除证书 ${label}`, 'ok');
-    loadCerts();
+    cacheDrop('certs', 'overview');
+    loadCerts(true);
     loadOverview();
   } catch (e) {
     // 「正在使用」这类错误要完整展示，里面的指引很重要
@@ -1506,7 +1508,8 @@ async function delDDNS(domain) {
   try {
     await api('ddns?domain=' + encodeURIComponent(domain), { method: 'DELETE' });
     toast(`✓ 已删除 ${domain}`, 'ok');
-    loadDDNS();
+    cacheDrop('ddns', 'overview');
+    loadDDNS(true);
     loadOverview();
   } catch (e) {
     loadCapabilities(true);
@@ -1585,9 +1588,12 @@ function renderDDNS(rows) {
     </table>`;
 }
 
-function closeDDNS() {
+function closeDDNS(force) {
   const mask = $('ddns-mask');
-  if (mask && !tryCloseMask(mask, 'manual')) return;
+  if (!mask) return;
+  // 成功后按钮可能还处于 disabled，busy 守卫会误挡住关闭。
+  // 成功路径用 force=true 绕过，与 closeIssue(true) 一致。
+  if (!force && !tryCloseMask(mask, 'manual')) return;
   mask.classList.remove('on');
   resetDdnsForm();
 }
@@ -1680,8 +1686,8 @@ async function saveDDNS() {
 
     if (fail === 0) {
       toast(`已添加 ${ok} 个域名，飞牛 OS 将在几分钟内完成上报`, 'ok');
-      closeDDNS();
-      resetDdnsForm();
+      closeDDNS(true);   // 强制关闭：此时按钮仍 disabled，普通关闭会被 busy 守卫挡住
+      cacheDrop('ddns', 'overview');
     } else {
       const failed = results.filter((r) => !r.ok);
       showDialog('部分域名添加失败', `
@@ -1699,7 +1705,9 @@ async function saveDDNS() {
           </tbody>
         </table>`, [{ text: '知道了', pri: true }]);
     }
-    loadDDNS();
+    // 无论全成功还是部分成功都强制刷新（可能新增了记录）
+    cacheDrop('ddns', 'overview');
+    loadDDNS(true);
     loadOverview();
   } catch (e) {
     showDialog('添加 DDNS 失败', `<pre style="white-space:pre-wrap;font-size:12px">${esc(e.message)}</pre>`,
@@ -1857,7 +1865,8 @@ async function submitIssue() {
 
     // ★ 先把申请窗口关掉，再弹结果 —— 否则表单窗口会一直挡着
     closeIssue(true);
-    loadCerts();
+    cacheDrop('certs', 'overview');
+    loadCerts(true);
     loadOverview();
 
     showDialog('证书签发成功', `
@@ -2143,7 +2152,11 @@ function showConfirm(opts) {
 
     document.body.appendChild(mask);
 
+    // ★ 无论从哪个入口关闭（确定/取消/点遮罩/Esc），
+    //   都在这里统一移除 keydown 监听器，避免每次开框残留一个。
+    let onKey = null;
     const finish = (val) => {
+      if (onKey) document.removeEventListener('keydown', onKey);
       mask.remove();
       resolve(val);
     };
@@ -2154,11 +2167,8 @@ function showConfirm(opts) {
       if (e.target === mask) finish(false);   // 确认框点外面 = 取消
     });
     // Esc 也当取消
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        document.removeEventListener('keydown', onKey);
-        finish(false);
-      }
+    onKey = (e) => {
+      if (e.key === 'Escape') finish(false);
     };
     document.addEventListener('keydown', onKey);
 
@@ -2236,7 +2246,10 @@ function showPrompt(opts) {
       return out;
     };
 
+    // ★ 统一在 finish 里移除监听器（与 showConfirm 一致）
+    let onKey = null;
     const finish = (val) => {
+      if (onKey) document.removeEventListener('keydown', onKey);
       mask.remove();
       resolve(val);
     };
@@ -2244,13 +2257,11 @@ function showPrompt(opts) {
     mask.querySelector('[data-act="ok"]').addEventListener('click', () => finish(collect()));
     mask.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(null));
 
-    // 点外面不关闭（与全局策略一致），Esc 取消
-    const onKey = (e) => {
+    // 点外面不关闭（与全局策略一致），Esc 取消 / Enter 提交
+    onKey = (e) => {
       if (e.key === 'Escape') {
-        document.removeEventListener('keydown', onKey);
         finish(null);
       } else if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
-        document.removeEventListener('keydown', onKey);
         finish(collect());
       }
     };
@@ -2317,9 +2328,10 @@ document.querySelectorAll('.mask').forEach((m) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  document.querySelectorAll('.mask.on').forEach((m) => {
-    tryCloseMask(m, 'esc');
-  });
+  // ★ 只关最上层的遮罩：多层叠加时（如表单上叠 2FA 对话框），
+  //   不能一次把所有 mask 都关掉，否则底层表单被跳过 reset 直接关闭。
+  const masks = document.querySelectorAll('.mask.on');
+  if (masks.length) tryCloseMask(masks[masks.length - 1], 'esc');
 });
 
 // 初始化：先探测能力，再加载数据（横幅要最先出来）
