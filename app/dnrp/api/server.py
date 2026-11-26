@@ -896,7 +896,10 @@ class ApiApp:
         def _do_issue() -> dict[str, Any]:
             cli = _fn_client()
             try:
-                if twofa:
+                # ★ 只有账号确实开启了 2FA（connect 阶段拿到 accessToken）才需要验证码。
+                #   非 2FA 账号若表单残留验证码，twofa_verify 会因缺少 accessToken 报错，
+                #   导致正常签发被误阻断。
+                if twofa and getattr(cli, "access_token", ""):
                     try:
                         cli.twofa_verify(twofa)
                     except ws_client.FnosWsError as exc:
@@ -1285,6 +1288,12 @@ async def _read_http_request(
 
     body = b""
     clen = headers.get("content-length")
+    # ★ 请求体大小上限（1MB）：本 API 只传 JSON 配置，不需要大 body。
+    #   防止局域网恶意客户端用超大 Content-Length 吃内存。
+    MAX_BODY = 1024 * 1024
+    if clen and clen.isdigit() and int(clen) > MAX_BODY:
+        log.warning("拒绝超大请求体 Content-Length=%s", clen)
+        return None
     if clen and clen.isdigit() and int(clen) > 0:
         try:
             body = await asyncio.wait_for(
@@ -1299,9 +1308,10 @@ async def _read_http_request(
 def _build_response(resp: Response, method: str) -> bytes:
     body = resp.to_bytes()
     reason = {
-        200: "OK", 201: "Created", 400: "Bad Request", 404: "Not Found",
-        405: "Method Not Allowed", 409: "Conflict", 500: "Internal Server Error",
-        503: "Service Unavailable",
+        200: "OK", 201: "Created", 400: "Bad Request", 401: "Unauthorized",
+        404: "Not Found", 405: "Method Not Allowed", 409: "Conflict",
+        413: "Payload Too Large", 502: "Bad Gateway",
+        500: "Internal Server Error", 503: "Service Unavailable",
     }.get(resp.status, "OK")
 
     head = (
@@ -1434,7 +1444,8 @@ def _build_raw_response(status: int, ctype: str, body: bytes,
                         method: str = "GET") -> bytes:
     reason = {
         200: "OK", 304: "Not Modified", 400: "Bad Request",
-        404: "Not Found", 500: "Internal Server Error",
+        401: "Unauthorized", 404: "Not Found", 413: "Payload Too Large",
+        502: "Bad Gateway", 500: "Internal Server Error",
     }.get(status, "OK")
 
     head = (

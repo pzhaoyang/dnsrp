@@ -274,14 +274,22 @@ def _poll_issue(api: FnosClient, proc_id: Any, timeout: float = 180) -> str:
 
     deadline = _t.time() + timeout
     last = ""
+    consecutive_errors = 0
+    MAX_ERRORS = 5                      # 连续 5 次失败才放弃（ tolerate 网络抖动）
     while _t.time() < deadline:
         _t.sleep(5)
         try:
             st = api.call("appcgi.netsvr.cert.applystatus",
                           {"processId": proc_id}, timeout=30)
+            consecutive_errors = 0      # 成功一次就清零
         except FnosWsError as exc:
-            log.warning("查询签发状态失败: %s", exc)
-            return last
+            consecutive_errors += 1
+            log.warning("查询签发状态失败(%d/%d): %s",
+                        consecutive_errors, MAX_ERRORS, exc)
+            if consecutive_errors >= MAX_ERRORS:
+                # ★ 不再返回 last（空串会被当成成功），返回明确错误状态
+                return "error"
+            continue
 
         status = str((st or {}).get("status") or "")
         if status:
@@ -463,8 +471,17 @@ def renew_cert(api: FnosClient, cert_id: Any,
     if wait and proc_id is not None:
         status = _poll_issue(api, proc_id, timeout=timeout)
 
-    ok = status in ("success", "suc") if status else True
-    note = ("续期成功" if ok else f"已提交续期请求（状态 {status or '处理中'}）")
+    # ★ 只有白名单状态才算成功。空串/error/超时一律不算成功，
+    #   避免网络抖动时误报「续期成功」让用户以为高枕无忧。
+    ok = status in ("success", "suc")
+    if ok:
+        note = "续期成功"
+    elif status == "error":
+        note = "续期状态查询连续失败，无法确认是否成功，请稍后到证书管理页核实"
+    elif status:
+        note = f"续期请求已提交，当前状态 {status}，请稍后核实"
+    else:
+        note = "续期请求已提交，未能获取签发状态，请稍后核实"
 
     # 4. 续期后回读确认 renewed 状态与 renewal 标志
     try:

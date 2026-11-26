@@ -575,6 +575,11 @@ def build_ssl_context_loader():
     # servername -> (SSLContext, cert_fp, key_fp)
     ctx_cache: dict[str, tuple[ssl.SSLContext, tuple, tuple]] = {}
 
+    # ★ BUG-21：servername 来自客户端，随机 SNI 可让缓存无限增长。
+    #   fallback 证书匹配任意域名，所以每个随机 SNI 都会进缓存。
+    #   上限 512，超出时淘汰最早的一半。
+    MAX_SNI_CACHE = 512
+
     def resolve(servername: str) -> tuple[str, str] | None:
         entry = pick_cert(servername)
         if not entry:
@@ -587,6 +592,12 @@ def build_ssl_context_loader():
         cached = cache.get(servername)
         if cached and cached[2] == cfp and cached[3] == kfp:
             return cached[0], cached[1]
+
+        # 缓存上限保护（随机 SNI 攻击）
+        if servername not in cache and len(cache) >= MAX_SNI_CACHE:
+            for k in list(cache.keys())[:MAX_SNI_CACHE // 2]:
+                cache.pop(k, None)
+                ctx_cache.pop(k, None)
 
         cache[servername] = (entry.cert_path, entry.key_path, cfp, kfp)
         # 指纹变了，作废该域名的 context（关键：续期后不会再用旧证书）

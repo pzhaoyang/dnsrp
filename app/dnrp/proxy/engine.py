@@ -487,6 +487,18 @@ class ProxyEngine:
             await client_writer.drain()
 
             # ---- 判断响应体长度 ----
+            # ★ BUG-1：204/304/1xx 和 HEAD 响应按 RFC 没有 body。
+            #   不判断的话会走 _relay_all 等 EOF，keep-alive 后端不关连接，
+            #   一直挂到 120s 超时。
+            status_code = 0
+            try:
+                status_code = int(resp_lines[0].split(" ")[1])
+            except (IndexError, ValueError):
+                pass
+            no_body = (method.upper() == "HEAD"
+                       or status_code in (204, 304)
+                       or 100 <= status_code < 200)
+
             resp_clen = None
             resp_chunked = False
             for line in resp_text.split("\r\n")[1:]:
@@ -506,7 +518,9 @@ class ProxyEngine:
                 return
 
             # ---- 回传响应体 ----
-            if resp_clen is not None:
+            if no_body:
+                pass  # 204/304/HEAD/1xx：无 body，直接结束
+            elif resp_clen is not None:
                 await self._pipe(client_writer, resp_clen, backend_reader)
             elif resp_chunked:
                 # ★ chunked 响应必须按协议转发到终止块，不能读到 EOF：
@@ -555,14 +569,21 @@ class ProxyEngine:
                 src_reader.readuntil(b"\r\n"), timeout=IO_IDLE_TIMEOUT)
             dst_writer.write(line)
             try:
-                size = int(line.strip().split(b";")[0], 16)
+                # ★ BUG-6：分块 size 可能带 LWSP/扩展，必须 strip
+                size = int(line.strip().split(b";")[0].strip(), 16)
             except ValueError:
+                log.warning("非法 chunked 分块大小: %r", line)
                 break
             if size == 0:
-                # 读 trailer
-                trailer = await asyncio.wait_for(
-                    src_reader.readuntil(b"\r\n"), timeout=IO_IDLE_TIMEOUT)
-                dst_writer.write(trailer)
+                # ★ BUG-5：trailer 可以有多行，读到空行为止
+                while True:
+                    trailer = await asyncio.wait_for(
+                        src_reader.readuntil(b"\r\n"),
+                        timeout=IO_IDLE_TIMEOUT)
+                    dst_writer.write(trailer)
+                    if trailer == b"\r\n":
+                        break
+                await dst_writer.drain()
                 break
             data = await asyncio.wait_for(
                 src_reader.readexactly(size + 2), timeout=IO_IDLE_TIMEOUT)
