@@ -230,16 +230,22 @@ git tag v0.1.51 && git push origin v0.1.51
 
 ### 本地打包
 
-```bash
-# 下载 Linux 版 fnpack
-curl -fsSL https://static2.fnnas.com/fnpack/fnpack-1.0.4-linux-amd64 -o fnpack
-chmod +x fnpack
+一条命令搞定（等价于 Actions 的「预检 + 打包 + 校验」部分，跳过创建 Release）：
 
-# TMP 必须指向项目目录之外，否则 fnpack 会递归复制
-mkdir -p /tmp/fnpack-tmp && export TMPDIR=/tmp/fnpack-tmp
-./fnpack build --directory .
-mv dnsrp.fpk "dnsrp_$(grep '^version' manifest | awk -F= '{print $2}' | xargs)_all.fpk"
+```bash
+bash tools/build-local.sh
+# 产物在 dist/dnsrp_<版本>_all.fpk
 ```
+
+它会自动下载官方 Linux fnpack、检查必需文件/Python/Shell 语法/LF 换行符、
+打包并校验 gzip 与关键文件。可通过 `BUILD_OUT` 改输出目录。
+
+> 整个 workflow 无法直接本地跑——它用了 `actions/checkout`、
+> `setup-python`、`softprops/action-gh-release` 等 GitHub 专属 action，
+> 以及 `GITHUB_*`/`RUNNER_TEMP` 环境变量。`build-local.sh` 只复刻其中可本地执行的部分。
+
+若想完整模拟 Actions（连 action 一起跑），可用 [act](https://github.com/nektos/act) + Docker：
+`act workflow_dispatch`（需先安装 act）。
 
 ### 预检
 
