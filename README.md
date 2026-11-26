@@ -209,13 +209,36 @@ sslobj.context = new_ctx    # 不能改共享的 context
 需要 Windows + [fnpack](https://developer.fnnas.com/docs/cli/fnpack/) 打包工具，
 以及一台可 SSH 的飞牛 OS 设备用于测试。
 
-### 打包
+### 打包 / 发布（推荐：GitHub Actions）
+
+**最省事的方式**：到 GitHub 仓库的 **Actions** 页，点 **Build & Release fpk** →
+**Run workflow** → 点绿色按钮即可。它会自动下载 fnpack、预检、打包，
+并创建 Release 附上 `dnsrp_<版本>_all.fpk`。
+
+也可以直接打个 `v*` tag 推送，自动触发同样的流程：
 
 ```bash
-# 注意：TMP 必须指向项目目录之外，否则 fnpack 会递归复制
-export TMP=/path/outside/project/_build_tmp
-cd /path/to/fn_fpk_packages
-./fnpack.exe build --directory /path/to/dnsrp
+git tag v0.1.51 && git push origin v0.1.51
+```
+
+两种方式的 release tag 逻辑：
+- 手动触发且填了 tag → 用填的
+- 手动触发留空 → 用 manifest 里的版本（如 `v0.1.50`）
+- push tag → 用 push 的 tag
+
+产物 Release 地址：`https://github.com/pzhaoyang/dnsrp/releases`
+
+### 本地打包
+
+```bash
+# 下载 Linux 版 fnpack
+curl -fsSL https://static2.fnnas.com/fnpack/fnpack-1.0.4-linux-amd64 -o fnpack
+chmod +x fnpack
+
+# TMP 必须指向项目目录之外，否则 fnpack 会递归复制
+mkdir -p /tmp/fnpack-tmp && export TMPDIR=/tmp/fnpack-tmp
+./fnpack build --directory .
+mv dnsrp.fpk "dnsrp_$(grep '^version' manifest | awk -F= '{print $2}' | xargs)_all.fpk"
 ```
 
 ### 预检

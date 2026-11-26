@@ -1,0 +1,134 @@
+name: Build & Release fpk
+
+on:
+  # 在 Actions 页面点 "Run workflow" 手动触发
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (例如 v0.1.51，留空则用 manifest 版本)'
+        required: false
+        default: ''
+      prerelease:
+        description: '标记为预发布'
+        required: false
+        type: boolean
+        default: false
+  # 或 push v* tag 自动触发
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # 创建 release 需要
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version from manifest
+        id: ver
+        run: |
+          VERSION=$(grep '^version' manifest | awk -F= '{print $2}' | xargs)
+          INPUT_TAG="${{ github.event.inputs.release_tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            # 手动触发且指定了 tag
+            TAG="$INPUT_TAG"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            # tag push 触发，用 push 进来的 tag（如 v0.1.50）
+            TAG="$GITHUB_REF_NAME"
+          else
+            # 手动触发且留空，用 manifest 版本
+            TAG="v${VERSION}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "manifest 版本: $VERSION, release tag: $TAG"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Pre-build checks
+        run: |
+          set -e
+          echo "=== 必需文件 ==="
+          for f in manifest ICON.PNG ICON_256.PNG config/privilege config/resource \
+                   app/ui/config app/ui/index.cgi app/ui/images/icon_64.png \
+                   app/ui/images/icon_256.png app/www/index.html \
+                   cmd/main cmd/start.sh cmd/common.sh; do
+            [ -f "$f" ] || { echo "缺失: $f"; exit 1; }
+            echo "  OK $f"
+          done
+          echo "=== Python 语法 ==="
+          python3 -m compileall -q app/dnrp
+          find app -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+          echo "=== Shell 语法 ==="
+          for f in cmd/*; do
+            [ -f "$f" ] || continue
+            bash -n "$f" || exit 1
+          done
+          echo "=== 换行符 (LF) ==="
+          if grep -rl $'\r' manifest config cmd app --include='*.py' \
+                     --include='*.sh' --include='*.cgi' 2>/dev/null; then
+            echo "发现 CRLF，终止"; exit 1
+          fi
+          echo "全部通过"
+
+      - name: Download fnpack
+        run: |
+          curl -fsSL --retry 3 \
+            "https://static2.fnnas.com/fnpack/fnpack-1.0.4-linux-amd64" \
+            -o fnpack
+          chmod +x fnpack
+          ./fnpack --help | head -5
+
+      - name: Build fpk
+        run: |
+          set -e
+          # TMP 指向工作区外，避免 fnpack 递归复制
+          mkdir -p "$RUNNER_TEMP/fnpack-tmp"
+          export TMPDIR="$RUNNER_TEMP/fnpack-tmp"
+          ./fnpack build --directory .
+          FPK="dnsrp_${{ steps.ver.outputs.version }}_all.fpk"
+          mv dnsrp.fpk "$FPK"
+          echo "FPK=$FPK" >> "$GITHUB_ENV"
+          ls -lh "$FPK"
+
+      - name: Verify fpk
+        run: |
+          set -e
+          echo "=== gzip ==="
+          gzip -t "$FPK" && echo OK
+          echo "=== manifest ==="
+          tar xzOf "$FPK" manifest | head -5
+          echo "=== 关键内容 ==="
+          mkdir -p /tmp/fpkcheck
+          tar xzf "$FPK" -C /tmp/fpkcheck app.tgz
+          tar tzf /tmp/fpkcheck/app.tgz | grep -E 'dnrp/proxy/engine.py|www/index.html|config/privilege' | head
+          echo "=== SHA256 ==="
+          sha256sum "$FPK"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: dnsrp ${{ steps.ver.outputs.version }}
+          body: |
+            ## dnsrp ${{ steps.ver.outputs.version }} — 反向代理控制台
+
+            飞牛 OS (fnOS) 第三方应用：反向代理 + 证书管理 + DDNS，全部复用 fnOS 自有能力。
+
+            **安装**：应用中心 → 手动安装 → 选择 `dnsrp_${{ steps.ver.outputs.version }}_all.fpk`
+
+            ### 本次变更
+            请查看 commit 历史：https://github.com/${{ github.repository }}/commits/${{ steps.ver.outputs.tag }}
+
+            ### 校验
+            SHA256 见构建日志，或直接下载后验证。
+          files: ${{ env.FPK }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          generate_release_notes: true
